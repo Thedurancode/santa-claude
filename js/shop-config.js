@@ -4,7 +4,8 @@
    2. CHECKOUT  paste your Shopify store domain and each size's variant ID.
                 Until that is filled in, the bag sends a "hold my order"
                 request to the inbox instead of taking payment.
-   3. PIXELS    paste your Meta / TikTok / Google IDs. Empty = not loaded.
+   3. PIXELS    paste your Meta / TikTok / Google IDs here, or better, in the
+                admin panel (/admin/) once the store server is connected.
 */
 window.SHOP = {
   brand: 'Santa Claude',
@@ -15,6 +16,10 @@ window.SHOP = {
   shipsIn: 'Ships in 2–3 business days',
   returns: 'Free size exchanges within 30 days',
   holidayCutoff: 'Order by December 15 for US delivery before Christmas',
+
+  // The store server (checkout-worker/), e.g. 'https://santa-claude.yourname.workers.dev'.
+  // It powers the admin panel at /admin/: visitor stats, orders, pixels and product settings.
+  api: '',
 
   checkout: {
     // Stripe: the URL of the checkout worker (see checkout-worker/README.md), e.g.

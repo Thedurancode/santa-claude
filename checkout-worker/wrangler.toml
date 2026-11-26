@@ -1,0 +1,13 @@
+# Deploy with:  npx wrangler deploy   (run inside checkout-worker/)
+# See README.md for the one-time setup (database, password, Stripe key).
+name = "santa-claude"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+[vars]
+SITE_URL = "https://thedurancode.github.io/santa-claude/"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "santa-claude"
+database_id = "PASTE-DATABASE-ID-HERE"   # from: npx wrangler d1 create santa-claude

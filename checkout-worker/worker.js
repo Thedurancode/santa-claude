@@ -1,22 +1,32 @@
-/* Santa Claude checkout and server-side conversion tracking.
+/* Santa Claude store server: checkout, analytics and the admin panel's API.
 
-   POST /           bag → Stripe Checkout session (returns { url })
-   POST /webhook    Stripe "checkout.session.completed" → Purchase sent to
-                    Meta Conversions API, TikTok Events API and GA4, using the
-                    Stripe session ID as the event ID so the browser pixel and
-                    the server copy are counted once.
+   POST /                 bag → Stripe Checkout session (returns { url })
+   POST /webhook          Stripe "checkout.session.completed" → order saved, and the
+                          Purchase sent to Meta Conversions API, TikTok Events API and
+                          GA4 with the Stripe session ID as the event ID, so the browser
+                          pixel and the server copy are counted once.
+   POST /e                one visitor event from the shop (page, view, add, checkout, lead)
+   GET  /config           pixel IDs and product changes saved in the admin panel
+   POST /admin/login      password → admin token
+   GET  /admin/stats      traffic, sources, countries, products, funnel (?days=7)
+   GET  /admin/live       visitors on the site right now
+   GET  /admin/orders     paid orders and held orders
+   GET  /admin/settings   pixels, server tokens and product changes
+   PUT  /admin/settings
 
-   Settings (Cloudflare → Worker → Settings → Variables; mark keys as Secret):
-     STRIPE_SECRET_KEY       required  sk_test_… or sk_live_…
-     SITE_URL                required  https://thedurancode.github.io/santa-claude/
-     STRIPE_WEBHOOK_SECRET   for tracking  whsec_… from the Stripe webhook you create
-     META_PIXEL_ID, META_CAPI_TOKEN            Meta Conversions API (Events Manager → Settings)
-     META_TEST_EVENT_CODE                      optional, shows server events in Test Events
-     TIKTOK_PIXEL_ID, TIKTOK_EVENTS_TOKEN      TikTok Events API (Events Manager → pixel → Settings)
-     GA4_ID, GA4_API_SECRET                    GA4 Measurement Protocol (Admin → Data streams)
+   Bindings and settings (Cloudflare → Worker → Settings; mark keys as Secret):
+     DB                      D1 database binding (stores visits, orders, settings)
+     ADMIN_PASSWORD          password for the admin panel
+     STRIPE_SECRET_KEY       sk_test_… or sk_live_…
+     SITE_URL                https://thedurancode.github.io/santa-claude/
+     STRIPE_WEBHOOK_SECRET   whsec_… from the Stripe webhook you create
+   Pixel IDs and conversion tokens are entered in the admin panel. The old
+   variables (META_PIXEL_ID, META_CAPI_TOKEN, META_TEST_EVENT_CODE,
+   TIKTOK_PIXEL_ID, TIKTOK_EVENTS_TOKEN, GA4_ID, GA4_API_SECRET) still work and
+   are used when the admin field is empty.
 
-   Prices come from the CATALOG below, never from the browser. After changing
-   prices in js/shop-config.js, run `python3 tools/build_worker.py` and redeploy. */
+   Prices come from the CATALOG below, or from a price set in the admin panel,
+   never from the browser. */
 
 const CATALOG = {
   "currency": "usd",
@@ -117,44 +127,272 @@ const CATALOG = {
   "shippingCents": 800
 };
 
-const cors = origin => ({
-  'Access-Control-Allow-Origin': origin,
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Vary': 'Origin'
-});
-const json = (body, status, headers) => new Response(JSON.stringify(body), { status: status || 200, headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}) });
 const enc = new TextEncoder();
 const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 const sha256 = async s => s ? hex(await crypto.subtle.digest('SHA-256', enc.encode(String(s).trim().toLowerCase()))) : undefined;
-const clip = (s, n) => String(s || '').slice(0, n || 400);
+const clip = (s, n) => String(s == null ? '' : s).slice(0, n || 400);
+const json = (body, status, headers) => new Response(JSON.stringify(body), { status: status || 200, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers || {}) });
 
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
-    if (url.pathname.replace(/\/$/, '') === '/webhook') return webhook(req, env, ctx);
-    return createSession(req, env);
+    const path = url.pathname.replace(/\/+$/, '') || '/';
+    if (path === '/webhook') return webhook(req, env, ctx);
+
+    const site = new URL(env.SITE_URL);
+    const origin = req.headers.get('Origin') || '';
+    const allowed = origin === site.origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    const h = {
+      'Access-Control-Allow-Origin': allowed ? origin : site.origin,
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+      'Vary': 'Origin'
+    };
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: h });
+
+    try {
+      if (path === '/e') return await collect(req, env, allowed);
+      if (path === '/config') return await publicConfig(env, h);
+      if (path === '/admin/login') return await login(req, env, h);
+      if (path.startsWith('/admin/')) {
+        if (!(await authed(req, env))) return json({ error: 'Sign in again' }, 401, h);
+        if (path === '/admin/stats') return await stats(url, env, h);
+        if (path === '/admin/live') return await live(env, h);
+        if (path === '/admin/orders') return await orders(env, h);
+        if (path === '/admin/settings') return req.method === 'PUT' ? await saveSettings(req, env, h) : json(redact(await getSettings(env)), 200, h);
+        return json({ error: 'Not found' }, 404, h);
+      }
+      if (path === '/') {
+        if (req.method !== 'POST') return json({ ok: true, service: 'Santa Claude store server' }, 200, h);
+        if (!allowed) return json({ error: 'Not allowed' }, 403, h);
+        return await createSession(req, env, h);
+      }
+      return json({ error: 'Not found' }, 404, h);
+    } catch (e) {
+      return json({ error: 'Server error', detail: String(e && e.message || e) }, 500, h);
+    }
   }
 };
 
-/* ───────── checkout session ───────── */
-async function createSession(req, env) {
-  const site = new URL(env.SITE_URL);
-  const origin = req.headers.get('Origin') || '';
-  const allowed = origin === site.origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-  const h = cors(allowed ? origin : site.origin);
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: h });
-  if (req.method !== 'POST') return json({ error: 'Use POST' }, 405, h);
-  if (!allowed) return json({ error: 'Not allowed' }, 403, h);
+/* ───────── database ───────── */
+let ready = null;
+const ensure = env => {
+  if (!env.DB) return Promise.resolve(false);
+  if (!ready) ready = env.DB.batch([
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, vid TEXT, sid TEXT, type TEXT, path TEXT, product TEXT, qty INTEGER, value REAL,
+      country TEXT, region TEXT, city TEXT, lat REAL, lon REAL, source TEXT, medium TEXT, campaign TEXT, ref TEXT, device TEXT)`),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS events_ts ON events(ts)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS events_sid ON events(sid)'),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, ts INTEGER, kind TEXT, name TEXT, email TEXT, value REAL, currency TEXT, items TEXT,
+      country TEXT, city TEXT, source TEXT, medium TEXT, campaign TEXT, sid TEXT)`),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS orders_ts ON orders(ts)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)')
+  ]).then(() => true).catch(e => { ready = null; throw e; });
+  return ready;
+};
 
+const DEFAULTS = {
+  pixels: { metaPixelId: '', tiktokPixelId: '', ga4Id: '', googleAdsId: '', googleAdsPurchaseLabel: '', gtmId: '', pinterestTagId: '', snapPixelId: '' },
+  server: { metaCapiToken: '', metaTestEventCode: '', tiktokEventsToken: '', ga4ApiSecret: '' },
+  products: {}
+};
+async function getSettings(env) {
+  const out = JSON.parse(JSON.stringify(DEFAULTS));
+  if (!(await ensure(env))) return out;
+  const row = await env.DB.prepare("SELECT v FROM settings WHERE k = 'site'").first();
+  if (row) { try { const v = JSON.parse(row.v); ['pixels', 'server', 'products'].forEach(k => Object.assign(out[k], v[k] || {})); } catch (e) {} }
+  return out;
+}
+const ID = /^[A-Za-z0-9_\-]{0,80}$/;
+async function saveSettings(req, env, h) {
+  if (!(await ensure(env))) return json({ error: 'Database not connected' }, 500, h);
+  let b; try { b = await req.json(); } catch (e) { return json({ error: 'Bad request' }, 400, h); }
+  const cur = await getSettings(env);
+  const bad = [];
+  const pick = (src, keys, max, rx) => { const o = {}; keys.forEach(k => { const v = clip(src && src[k], max).trim(); if (rx && v && !rx.test(v)) bad.push(k); o[k] = v; }); return o; };
+  if (b.pixels) cur.pixels = pick(b.pixels, Object.keys(DEFAULTS.pixels), 80, ID);
+  if (b.server) { // empty means "keep the saved value"; send "-" to clear
+    const s = pick(b.server, Object.keys(DEFAULTS.server), 600);
+    Object.keys(s).forEach(k => { if (s[k] === '-') cur.server[k] = ''; else if (s[k]) cur.server[k] = s[k]; });
+  }
+  if (b.products && typeof b.products === 'object') {
+    const p = {};
+    Object.keys(b.products).forEach(id => {
+      if (!CATALOG.products[id]) return;
+      const x = b.products[id] || {}, o = {};
+      const price = parseFloat(x.price);
+      if (x.price !== '' && x.price != null) { if (isFinite(price) && price > 0 && price < 10000) o.price = Math.round(price * 100) / 100; else bad.push(id + ' price'); }
+      if (x.badge) o.badge = clip(x.badge, 24).trim();
+      if (x.hidden) o.hidden = true;
+      ['metaPixelId', 'tiktokPixelId', 'googleAdsLabel'].forEach(k => { const v = clip(x[k], 80).trim(); if (v && !ID.test(v)) bad.push(id + ' ' + k); else if (v) o[k] = v; });
+      if (Object.keys(o).length) p[id] = o;
+    });
+    cur.products = p;
+  }
+  if (bad.length) return json({ error: 'Check these fields: ' + bad.join(', ') }, 400, h);
+  await env.DB.prepare("INSERT INTO settings (k, v) VALUES ('site', ?1) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(JSON.stringify(cur)).run();
+  return json(Object.assign({ saved: true }, redact(cur)), 200, h);
+}
+// Tokens are write-only from the admin panel: it sees whether one is set, never the value.
+const redact = s => Object.assign({}, s, { server: Object.fromEntries(Object.entries(s.server).map(([k, v]) => [k, v ? '•••• ' + v.slice(-4) : ''])) });
+
+async function publicConfig(env, h) {
+  const s = await getSettings(env);
+  return json({ pixels: s.pixels, products: s.products, at: Date.now() }, 200, Object.assign({}, h, { 'Cache-Control': 'public, max-age=30' }));
+}
+
+/* ───────── visitor events ───────── */
+const BOT = /bot|crawl|spider|slurp|headless|lighthouse|pingdom|preview|facebookexternalhit|bingpreview|embedly|python-requests|curl|wget/i;
+const TYPES = ['page', 'view', 'add', 'checkout', 'lead'];
+const SEARCH = /(^|\.)(google|bing|duckduckgo|yahoo|ecosia|baidu|yandex|brave|startpage|kagi)\./;
+const SOCIAL = { 'facebook': 'facebook', 'fb.': 'facebook', 'instagram': 'instagram', 't.co': 'x', 'twitter': 'x', 'x.com': 'x', 'tiktok': 'tiktok', 'reddit': 'reddit', 'linkedin': 'linkedin', 'lnkd': 'linkedin', 'youtube': 'youtube', 'pinterest': 'pinterest', 'snapchat': 'snapchat', 'threads': 'threads', 'news.ycombinator': 'hacker news', 'bsky': 'bluesky', 'github': 'github', 'discord': 'discord' };
+
+// Where the visit came from: campaign tags first, then ad click IDs, then the referring site.
+function classify(a, ref, siteHost) {
+  a = a || {};
+  let host = '';
+  try { host = ref ? new URL(ref).hostname.replace(/^(www|m|l|lm)\./, '') : ''; } catch (e) {}
+  if (host === siteHost) host = '';
+  const lc = s => clip(s, 80).trim().toLowerCase();
+  if (a.utm_source) return { source: lc(a.utm_source), medium: lc(a.utm_medium) || (a.fbclid || a.ttclid || a.gclid ? 'paid' : 'campaign'), campaign: clip(a.utm_campaign, 120).trim(), ref: host };
+  if (a.gclid || a.gbraid || a.wbraid) return { source: 'google', medium: 'paid', campaign: '', ref: host };
+  if (a.fbclid) return { source: host.includes('instagram') ? 'instagram' : 'facebook', medium: 'paid', campaign: '', ref: host };
+  if (a.ttclid) return { source: 'tiktok', medium: 'paid', campaign: '', ref: host };
+  if (a.msclkid) return { source: 'bing', medium: 'paid', campaign: '', ref: host };
+  if (a.epik) return { source: 'pinterest', medium: 'paid', campaign: '', ref: host };
+  if (a.ScCid) return { source: 'snapchat', medium: 'paid', campaign: '', ref: host };
+  if (!host) return { source: 'direct', medium: 'none', campaign: '', ref: '' };
+  if (SEARCH.test('.' + host)) return { source: host.split('.').slice(-2)[0], medium: 'organic', campaign: '', ref: host };
+  const k = Object.keys(SOCIAL).find(s => host.includes(s));
+  if (k) return { source: SOCIAL[k], medium: 'social', campaign: '', ref: host };
+  return { source: host, medium: 'referral', campaign: '', ref: host };
+}
+const device = ua => /iPad|Tablet|PlayBook|Silk|(Android(?!.*Mobile))/i.test(ua) ? 'tablet' : /Mobi|iPhone|iPod|Android|Opera Mini|IEMobile/i.test(ua) ? 'mobile' : 'desktop';
+const geo = req => {
+  const cf = req.cf || {};
+  const n = v => { const x = parseFloat(v); return isFinite(x) ? Math.round(x * 100) / 100 : null; };
+  return { country: clip(cf.country, 2) || '', region: clip(cf.region, 80), city: clip(cf.city, 80), lat: n(cf.latitude), lon: n(cf.longitude) };
+};
+
+async function collect(req, env, allowed) {
+  const ok = new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*' } });
+  if (req.method !== 'POST' || !allowed) return ok;
+  const ua = req.headers.get('User-Agent') || '';
+  if (BOT.test(ua) || !(await ensure(env))) return ok;
+  let b; try { b = JSON.parse(await req.text()); } catch (e) { return ok; }
+  if (!b || !TYPES.includes(b.t) || !/^[a-z0-9]{6,32}$/i.test(b.vid || '') || !/^[a-z0-9]{6,32}$/i.test(b.sid || '')) return ok;
+  const g = geo(req), src = classify(b.a, b.r, new URL(env.SITE_URL).hostname.replace(/^www\./, ''));
+  const items = (Array.isArray(b.i) ? b.i : []).slice(0, 20).filter(i => i && CATALOG.products[i.id]);
+  const row = [Date.now(), b.vid, b.sid, b.t, clip(b.p, 200), '', 0, 0, g.country, g.region, g.city, g.lat, g.lon, src.source, src.medium, src.campaign, src.ref, device(ua)];
+  const ins = 'INSERT INTO events (ts, vid, sid, type, path, product, qty, value, country, region, city, lat, lon, source, medium, campaign, ref, device) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)';
+  const stmts = [];
+  if (b.t === 'page' || !items.length) stmts.push(env.DB.prepare(ins).bind(...row));
+  else items.forEach(i => { const r = row.slice(); r[5] = i.id; r[6] = Math.max(1, Math.min(10, parseInt(i.qty, 10) || 1)); r[7] = Math.round((parseFloat(i.price) || 0) * r[6] * 100) / 100; stmts.push(env.DB.prepare(ins).bind(...r)); });
+  if (b.t === 'lead' && b.who && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.who.email || '')) {
+    const value = items.reduce((s, i) => s + (parseFloat(i.price) || 0) * (parseInt(i.qty, 10) || 1), 0);
+    stmts.push(env.DB.prepare('INSERT OR REPLACE INTO orders (id, ts, kind, name, email, value, currency, items, country, city, source, medium, campaign, sid) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)')
+      .bind('lead-' + b.sid, Date.now(), b.hold ? 'hold' : 'started', clip(b.who.name, 120), clip(b.who.email, 200), Math.round(value * 100) / 100, CATALOG.currency.toUpperCase(),
+        JSON.stringify(items.map(i => ({ id: i.id, size: clip(i.variant, 8), qty: parseInt(i.qty, 10) || 1, price: parseFloat(i.price) || 0 }))), g.country, g.city, src.source, src.medium, src.campaign, b.sid));
+  }
+  await env.DB.batch(stmts);
+  return ok;
+}
+
+/* ───────── admin sign-in ───────── */
+const hmac = async (key, msg) => hex(await crypto.subtle.sign('HMAC', await crypto.subtle.importKey('raw', enc.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']), enc.encode(msg)));
+async function login(req, env, h) {
+  if (req.method !== 'POST') return json({ error: 'Use POST' }, 405, h);
+  if (!env.ADMIN_PASSWORD) return json({ error: 'Set ADMIN_PASSWORD on the server first' }, 500, h);
+  let b; try { b = await req.json(); } catch (e) { b = {}; }
+  // Compare HMACs rather than the raw strings, so timing says nothing about the password.
+  const [a, c] = await Promise.all([hmac('pw', String(b.password || '')), hmac('pw', env.ADMIN_PASSWORD)]);
+  if (a !== c) { await new Promise(r => setTimeout(r, 700)); return json({ error: 'That password isn’t right' }, 401, h); }
+  const exp = Date.now() + 14 * 864e5;
+  return json({ token: exp + '.' + await hmac(env.ADMIN_PASSWORD, 'admin.' + exp), exp }, 200, h);
+}
+async function authed(req, env) {
+  const t = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/, '');
+  const [exp, sig] = t.split('.');
+  if (!env.ADMIN_PASSWORD || !exp || !sig || Number(exp) < Date.now()) return false;
+  return sig === await hmac(env.ADMIN_PASSWORD, 'admin.' + exp);
+}
+
+/* ───────── admin numbers ───────── */
+async function stats(url, env, h) {
+  if (!(await ensure(env))) return json({ error: 'Database not connected' }, 500, h);
+  const days = Math.max(1, Math.min(365, parseInt(url.searchParams.get('days'), 10) || 7));
+  const off = Math.max(-840, Math.min(840, parseInt(url.searchParams.get('tz'), 10) || 0)) * 60; // browser offset in minutes → seconds
+  const now = Date.now();
+  // "Today" starts at local midnight; longer ranges are whole local days ending today.
+  const dayMs = 864e5, localNow = now + off * 1000;
+  const from = Math.floor(localNow / dayMs) * dayMs - off * 1000 - (days - 1) * dayMs;
+  const prevFrom = from - days * dayMs;
+  const D = env.DB, R = 'ts >= ?1 AND ts < ?2';
+  const totalsSql = `SELECT COUNT(DISTINCT vid) visitors, COUNT(DISTINCT sid) sessions, COALESCE(SUM(type = 'page'), 0) pageviews,
+      COUNT(DISTINCT CASE WHEN type = 'view' THEN sid END) viewed, COUNT(DISTINCT CASE WHEN type = 'add' THEN sid END) added,
+      COUNT(DISTINCT CASE WHEN type = 'checkout' THEN sid END) checkout, COUNT(DISTINCT CASE WHEN type = 'lead' THEN sid END) details,
+      COUNT(DISTINCT CASE WHEN type = 'purchase' THEN sid END) bought FROM events WHERE ${R} AND type != 'sold'`;
+  const orderSql = `SELECT COUNT(*) orders, COALESCE(SUM(value), 0) revenue FROM orders WHERE kind = 'paid' AND ${R}`;
+  const q = (sql, a, b) => D.prepare(sql).bind(a, b);
+  const [cur, prev, ord, prevOrd, daily, dailyOrd, countries, cities, sources, campaigns, products, sold, devices, refs] = await D.batch([
+    q(totalsSql, from, now), q(totalsSql, prevFrom, from), q(orderSql, from, now), q(orderSql, prevFrom, from),
+    D.prepare(`SELECT CAST((ts / 1000 + ?3) / 86400 AS INTEGER) d, COUNT(DISTINCT vid) visitors, COUNT(DISTINCT CASE WHEN type = 'add' THEN sid END) added FROM events WHERE ${R} AND type != 'sold' GROUP BY d`).bind(from, now, off),
+    D.prepare(`SELECT CAST((ts / 1000 + ?3) / 86400 AS INTEGER) d, COUNT(*) orders, SUM(value) revenue FROM orders WHERE kind = 'paid' AND ${R} GROUP BY d`).bind(from, now, off),
+    q(`SELECT country, COUNT(DISTINCT vid) visitors, COUNT(DISTINCT CASE WHEN type = 'add' THEN sid END) added, COUNT(DISTINCT CASE WHEN type = 'purchase' THEN sid END) orders, COALESCE(SUM(CASE WHEN type = 'purchase' THEN value END), 0) revenue FROM events WHERE ${R} AND country != '' GROUP BY country ORDER BY visitors DESC LIMIT 60`, from, now),
+    q(`SELECT city, region, country, ROUND(AVG(lat), 2) lat, ROUND(AVG(lon), 2) lon, COUNT(DISTINCT vid) visitors, COUNT(DISTINCT CASE WHEN type = 'purchase' THEN sid END) orders FROM events WHERE ${R} AND lat IS NOT NULL GROUP BY country, city ORDER BY visitors DESC LIMIT 400`, from, now),
+    q(`SELECT source, medium, COUNT(DISTINCT vid) visitors, COUNT(DISTINCT CASE WHEN type = 'add' THEN sid END) added, COUNT(DISTINCT CASE WHEN type = 'checkout' THEN sid END) checkout, COUNT(DISTINCT CASE WHEN type = 'purchase' THEN sid END) orders, COALESCE(SUM(CASE WHEN type = 'purchase' THEN value END), 0) revenue FROM events WHERE ${R} GROUP BY source, medium ORDER BY visitors DESC LIMIT 40`, from, now),
+    q(`SELECT source, campaign, COUNT(DISTINCT vid) visitors, COUNT(DISTINCT CASE WHEN type = 'add' THEN sid END) added, COUNT(DISTINCT CASE WHEN type = 'purchase' THEN sid END) orders, COALESCE(SUM(CASE WHEN type = 'purchase' THEN value END), 0) revenue FROM events WHERE ${R} AND campaign != '' GROUP BY source, campaign ORDER BY visitors DESC LIMIT 40`, from, now),
+    q(`SELECT product, COUNT(DISTINCT CASE WHEN type = 'view' THEN sid END) viewed, COALESCE(SUM(CASE WHEN type = 'add' THEN qty END), 0) added FROM events WHERE ${R} AND product != '' GROUP BY product`, from, now),
+    q(`SELECT product, COALESCE(SUM(qty), 0) sold, COALESCE(SUM(value), 0) revenue FROM events WHERE ${R} AND type = 'sold' GROUP BY product`, from, now),
+    q(`SELECT device, COUNT(DISTINCT vid) visitors FROM events WHERE ${R} GROUP BY device ORDER BY visitors DESC`, from, now),
+    q(`SELECT ref, COUNT(DISTINCT vid) visitors FROM events WHERE ${R} AND ref != '' GROUP BY ref ORDER BY visitors DESC LIMIT 20`, from, now)
+  ]);
+  const one = r => (r.results && r.results[0]) || {};
+  const soldBy = Object.fromEntries(sold.results.map(r => [r.product, r]));
+  const prods = products.results;
+  sold.results.forEach(r => { if (!prods.some(p => p.product === r.product)) prods.push({ product: r.product, viewed: 0, added: 0 }); });
+  return json({
+    days, from, to: now, tz: off / 60, startDay: Math.floor((from / 1000 + off) / 86400),
+    totals: Object.assign(one(cur), one(ord)), previous: Object.assign(one(prev), one(prevOrd)),
+    daily: daily.results, dailyOrders: dailyOrd.results,
+    countries: countries.results, cities: cities.results, sources: sources.results, campaigns: campaigns.results,
+    products: prods.map(r => Object.assign(r, { sold: (soldBy[r.product] || {}).sold || 0, revenue: (soldBy[r.product] || {}).revenue || 0 })),
+    devices: devices.results, referrers: refs.results
+  }, 200, h);
+}
+
+async function live(env, h) {
+  if (!(await ensure(env))) return json({ error: 'Database not connected' }, 500, h);
+  const now = Date.now(), D = env.DB;
+  const [on, map, feed] = await D.batch([
+    D.prepare('SELECT COUNT(DISTINCT vid) n FROM events WHERE ts >= ?1').bind(now - 5 * 6e4),
+    D.prepare("SELECT city, country, ROUND(AVG(lat), 2) lat, ROUND(AVG(lon), 2) lon, COUNT(DISTINCT vid) visitors, MAX(ts) last FROM events WHERE ts >= ?1 AND lat IS NOT NULL GROUP BY country, city").bind(now - 30 * 6e4),
+    D.prepare("SELECT ts, vid, type, path, product, qty, value, country, region, city, source, medium, campaign, device FROM events WHERE ts >= ?1 AND type != 'sold' ORDER BY ts DESC LIMIT 60").bind(now - 24 * 36e5)
+  ]);
+  return json({ now, online: (on.results[0] || {}).n || 0, places: map.results, feed: feed.results }, 200, h);
+}
+
+async function orders(env, h) {
+  if (!(await ensure(env))) return json({ error: 'Database not connected' }, 500, h);
+  const r = await env.DB.prepare('SELECT * FROM orders ORDER BY ts DESC LIMIT 300').all();
+  return json({ orders: r.results.map(o => Object.assign(o, { items: (() => { try { return JSON.parse(o.items || '[]'); } catch (e) { return []; } })() })) }, 200, h);
+}
+
+/* ───────── checkout session ───────── */
+async function createSession(req, env, h) {
+  const site = new URL(env.SITE_URL);
   let body;
   try { body = await req.json(); } catch (e) { return json({ error: 'Bad request' }, 400, h); }
   const email = clip(body.email, 200).trim();
   const name = clip(body.name, 120).trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'Enter a valid email' }, 400, h);
+  if (!env.STRIPE_SECRET_KEY) return json({ error: 'Payments aren’t switched on yet' }, 503, h);
 
+  const over = (await getSettings(env)).products;
+  const product = id => { const p = CATALOG.products[id], o = over[id] || {}; return p && !o.hidden ? Object.assign({}, p, o.price ? { price: o.price } : {}) : null; };
   const lines = (Array.isArray(body.items) ? body.items : []).slice(0, 30).map(l => ({
-    p: CATALOG.products[l.id], id: l.id, size: String(l.size), qty: Math.max(1, Math.min(10, parseInt(l.qty, 10) || 1))
+    p: product(l.id), id: l.id, size: String(l.size), qty: Math.max(1, Math.min(10, parseInt(l.qty, 10) || 1))
   })).filter(l => l.p && CATALOG.sizes.includes(l.size));
   if (!lines.length) return json({ error: 'Your bag is empty' }, 400, h);
 
@@ -192,7 +430,7 @@ async function createSession(req, env) {
   f.set(`${s}[delivery_estimate][maximum][unit]`, 'business_day');
   f.set(`${s}[delivery_estimate][maximum][value]`, 8);
 
-  // Everything the webhook needs to report the sale to the ad platforms later.
+  // Everything the webhook needs to report the sale to the ad platforms and the admin panel later.
   const meta = {
     name,
     cart: lines.map(l => `${l.id}-${l.size}:${l.qty}:${Math.round(l.p.price * 100 * (1 - off))}`).join(','),
@@ -200,7 +438,7 @@ async function createSession(req, env) {
     ua: req.headers.get('User-Agent') || ''
   };
   const ids = body.ids && typeof body.ids === 'object' ? body.ids : {};
-  ['fbp', 'fbc', 'ttp', 'ttclid', 'ga_client_id', 'gclid', 'page'].forEach(k => { if (ids[k]) meta[k] = ids[k]; });
+  ['fbp', 'fbc', 'ttp', 'ttclid', 'ga_client_id', 'gclid', 'page', 'vid', 'sid'].forEach(k => { if (ids[k]) meta[k] = ids[k]; });
   const attr = body.utm && typeof body.utm === 'object' ? body.utm : {};
   Object.keys(attr).slice(0, 15).forEach(k => { if (/^[A-Za-z_]{2,20}$/.test(k)) meta[k] = attr[k]; });
   Object.keys(meta).slice(0, 45).forEach(k => f.set(`metadata[${k}]`, clip(meta[k], 490)));
@@ -215,15 +453,13 @@ async function createSession(req, env) {
   return json({ url: out.url, id: out.id }, 200, h);
 }
 
-/* ───────── Stripe webhook → server-side Purchase ───────── */
+/* ───────── Stripe webhook → order saved + server-side Purchase ───────── */
 async function verifyStripe(raw, header, secret) {
   if (!header || !secret) return false;
   const parts = Object.fromEntries(header.split(',').map(p => p.split('=')));
   const t = parts.t, sigs = header.split(',').filter(p => p.startsWith('v1=')).map(p => p.slice(3));
   if (!t || !sigs.length || Math.abs(Date.now() / 1000 - Number(t)) > 300) return false;
-  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const expected = hex(await crypto.subtle.sign('HMAC', key, enc.encode(`${t}.${raw}`)));
-  return sigs.includes(expected);
+  return sigs.includes(await hmac(secret, `${t}.${raw}`));
 }
 
 async function webhook(req, env, ctx) {
@@ -239,23 +475,49 @@ async function webhook(req, env, ctx) {
   const cd = ses.customer_details || {};
   const addr = (ses.shipping_details && ses.shipping_details.address) || cd.address || {};
   const nameParts = String(cd.name || m.name || '').trim().toLowerCase().split(/\s+/);
-  const items = String(m.cart || '').split(',').filter(Boolean).map(x => { const [sku, qty, cents] = x.split(':'); return { sku, id: sku.replace(/-[^-]+$/, ''), qty: Number(qty), price: Number(cents) / 100 }; });
+  const items = String(m.cart || '').split(',').filter(Boolean).map(x => { const [sku, qty, cents] = x.split(':'); return { sku, id: sku.replace(/-[^-]+$/, ''), size: sku.split('-').pop(), qty: Number(qty), price: Number(cents) / 100 }; });
   const order = {
     id: ses.id, value: (ses.amount_total || 0) / 100, currency: String(ses.currency || 'usd').toUpperCase(),
     time: Math.floor((ses.created || Date.now() / 1000)), items,
     email: cd.email || ses.customer_email, phone: String(cd.phone || '').replace(/[^\d]/g, ''),
-    fn: nameParts[0], ln: nameParts.slice(1).join(' '),
+    fn: nameParts[0], ln: nameParts.slice(1).join(' '), fullName: cd.name || m.name || '',
     city: String(addr.city || '').replace(/\s+/g, '').toLowerCase(), state: String(addr.state || '').toLowerCase(),
     zip: String(addr.postal_code || '').slice(0, 5), country: String(addr.country || '').toLowerCase(),
     ip: m.ip, ua: m.ua, page: m.page || env.SITE_URL, m
   };
-  const jobs = [sendMeta(order, env), sendTikTok(order, env), sendGA4(order, env)];
-  const results = await Promise.allSettled(jobs);
+  const fresh = await saveOrder(order, addr, env);
+  if (!fresh) return json({ ok: true, duplicate: true }); // Stripe retried; already reported
+  const s = await getSettings(env);
+  const cfg = {
+    metaPixel: s.pixels.metaPixelId || env.META_PIXEL_ID, metaToken: s.server.metaCapiToken || env.META_CAPI_TOKEN, metaTest: s.server.metaTestEventCode || env.META_TEST_EVENT_CODE,
+    ttPixel: s.pixels.tiktokPixelId || env.TIKTOK_PIXEL_ID, ttToken: s.server.tiktokEventsToken || env.TIKTOK_EVENTS_TOKEN,
+    ga4: s.pixels.ga4Id || env.GA4_ID, ga4Secret: s.server.ga4ApiSecret || env.GA4_API_SECRET
+  };
+  const results = await Promise.allSettled([sendMeta(order, cfg), sendTikTok(order, cfg), sendGA4(order, cfg)]);
   return json({ ok: true, sent: results.map(r => r.status === 'fulfilled' ? r.value : String(r.reason)) });
 }
 
-async function sendMeta(o, env) {
-  if (!env.META_PIXEL_ID || !env.META_CAPI_TOKEN) return 'meta: not configured';
+// Saves the order and books it to the visit it came from (source, campaign, place).
+// Returns false when the order was already saved, so a Stripe retry isn't counted twice.
+async function saveOrder(o, addr, env) {
+  if (!(await ensure(env))) return true;
+  const D = env.DB, sid = clip(o.m.sid, 32), vid = clip(o.m.vid, 32);
+  const visit = sid ? await D.prepare("SELECT country, region, city, lat, lon, source, medium, campaign, ref, device FROM events WHERE sid = ?1 ORDER BY ts LIMIT 1").bind(sid).first() : null;
+  const v = visit || { country: String(addr.country || '').toUpperCase(), region: addr.state || '', city: addr.city || '', lat: null, lon: null, source: o.m.utm_source || 'unknown', medium: o.m.utm_medium || '', campaign: o.m.utm_campaign || '', ref: '', device: device(o.ua || '') };
+  const res = await D.prepare('INSERT OR IGNORE INTO orders (id, ts, kind, name, email, value, currency, items, country, city, source, medium, campaign, sid) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)')
+    .bind(o.id, o.time * 1000, 'paid', clip(o.fullName, 120), clip(o.email, 200), o.value, o.currency, JSON.stringify(o.items.map(i => ({ id: i.id, size: i.size, qty: i.qty, price: i.price }))), v.country, v.city, v.source, v.medium, v.campaign, sid).run();
+  if (!res.meta || !res.meta.changes) return false;
+  const ins = 'INSERT INTO events (ts, vid, sid, type, path, product, qty, value, country, region, city, lat, lon, source, medium, campaign, ref, device) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)';
+  const base = [o.time * 1000, vid || 'server', sid || o.id.slice(-24), 'purchase', '', '', 0, o.value, v.country, v.region, v.city, v.lat, v.lon, v.source, v.medium, v.campaign, v.ref, v.device];
+  const stmts = [D.prepare(ins).bind(...base)];
+  o.items.forEach(i => { const r = base.slice(); r[3] = 'sold'; r[5] = i.id; r[6] = i.qty; r[7] = Math.round(i.price * i.qty * 100) / 100; stmts.push(D.prepare(ins).bind(...r)); });
+  if (sid) stmts.push(D.prepare('DELETE FROM orders WHERE id = ?1').bind('lead-' + sid)); // the held / started checkout became a paid order
+  await D.batch(stmts);
+  return true;
+}
+
+async function sendMeta(o, c) {
+  if (!c.metaPixel || !c.metaToken) return 'meta: not configured';
   const user = {
     em: [await sha256(o.email)], ph: o.phone ? [await sha256(o.phone)] : undefined,
     fn: [await sha256(o.fn)], ln: o.ln ? [await sha256(o.ln)] : undefined,
@@ -272,15 +534,15 @@ async function sendMeta(o, env) {
       custom_data: { currency: o.currency, value: o.value, order_id: o.id, content_type: 'product', content_ids: o.items.map(i => i.sku), contents: o.items.map(i => ({ id: i.sku, quantity: i.qty, item_price: i.price })), num_items: o.items.reduce((s, i) => s + i.qty, 0) }
     }]
   };
-  if (env.META_TEST_EVENT_CODE) body.test_event_code = env.META_TEST_EVENT_CODE;
-  const r = await fetch(`https://graph.facebook.com/v21.0/${env.META_PIXEL_ID}/events?access_token=${encodeURIComponent(env.META_CAPI_TOKEN)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (c.metaTest) body.test_event_code = c.metaTest;
+  const r = await fetch(`https://graph.facebook.com/v21.0/${c.metaPixel}/events?access_token=${encodeURIComponent(c.metaToken)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   return `meta: ${r.status}`;
 }
 
-async function sendTikTok(o, env) {
-  if (!env.TIKTOK_PIXEL_ID || !env.TIKTOK_EVENTS_TOKEN) return 'tiktok: not configured';
+async function sendTikTok(o, c) {
+  if (!c.ttPixel || !c.ttToken) return 'tiktok: not configured';
   const body = {
-    event_source: 'web', event_source_id: env.TIKTOK_PIXEL_ID,
+    event_source: 'web', event_source_id: c.ttPixel,
     data: [{
       event: 'CompletePayment', event_time: o.time, event_id: o.id,
       user: { email: await sha256(o.email), phone: o.phone ? await sha256('+' + o.phone) : undefined, external_id: await sha256(o.email), ttclid: o.m.ttclid || undefined, ttp: o.m.ttp || undefined, ip: o.ip || undefined, user_agent: o.ua || undefined },
@@ -288,17 +550,17 @@ async function sendTikTok(o, env) {
       properties: { currency: o.currency, value: o.value, order_id: o.id, content_type: 'product', contents: o.items.map(i => ({ content_id: i.sku, quantity: i.qty, price: i.price })) }
     }]
   };
-  const r = await fetch('https://business-api.tiktok.com/open_api/v1.3/event/track/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Access-Token': env.TIKTOK_EVENTS_TOKEN }, body: JSON.stringify(body) });
+  const r = await fetch('https://business-api.tiktok.com/open_api/v1.3/event/track/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Access-Token': c.ttToken }, body: JSON.stringify(body) });
   return `tiktok: ${r.status}`;
 }
 
-async function sendGA4(o, env) {
-  if (!env.GA4_ID || !env.GA4_API_SECRET) return 'ga4: not configured';
+async function sendGA4(o, c) {
+  if (!c.ga4 || !c.ga4Secret) return 'ga4: not configured';
   const body = {
     client_id: o.m.ga_client_id || `${Math.floor(Math.random() * 1e9)}.${o.time}`,
     user_data: { sha256_email_address: await sha256(o.email) },
     events: [{ name: 'purchase', params: { transaction_id: o.id, currency: o.currency, value: o.value, items: o.items.map(i => ({ item_id: i.id, item_variant: i.sku, price: i.price, quantity: i.qty })) } }]
   };
-  const r = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${env.GA4_ID}&api_secret=${env.GA4_API_SECRET}`, { method: 'POST', body: JSON.stringify(body) });
+  const r = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${c.ga4}&api_secret=${c.ga4Secret}`, { method: 'POST', body: JSON.stringify(body) });
   return `ga4: ${r.status}`;
 }

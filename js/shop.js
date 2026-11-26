@@ -2,7 +2,8 @@
    Product pictures are drawn as SVG from each product's colours in
    shop-config.js, so a new colourway needs no photo shoot. Swap in real
    photos later by adding `photos: ['front.jpg', 'back.jpg']` to a product. */
-(function () {
+// Runs once js/pixels.js has the admin panel's settings (prices, hidden designs, pixels).
+(window.shopReady || function (f) { f(); })(function () {
   var S = window.SHOP, $ = function (s, r) { return (r || document).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var track = window.shopTrack || function () {};
   var byId = {}; S.products.forEach(function (p) { byId[p.id] = p; });
@@ -502,4 +503,4 @@
   // Product data for Google Shopping / rich results
   var ld = { '@context': 'https://schema.org', '@graph': S.products.map(function (p) { return { '@type': 'Product', name: p.name, description: p.blurb, brand: { '@type': 'Brand', name: S.brand }, image: new URL(p.photos ? p.photos[0] : 'assets/og.jpg', location.href).href, offers: { '@type': 'Offer', price: p.price, priceCurrency: S.currency, availability: 'https://schema.org/InStock', url: location.href.split('#')[0] + '#' + p.id } }; }) };
   var sc = document.createElement('script'); sc.type = 'application/ld+json'; sc.textContent = JSON.stringify(ld); document.head.appendChild(sc);
-})();
+});
