@@ -24,9 +24,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400..700&family=JetBrains+Mono:wght@700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/shop.css?v=3">
-<script src="js/shop-config.js?v=3"></script>
-<script src="js/pixels.js?v=3"></script>
+<link rel="stylesheet" href="css/shop.css?v=5">
+<script src="js/shop-config.js?v=5"></script>
+<script src="js/pixels.js?v=5"></script>
 </head>
 <body>
 
@@ -45,8 +45,27 @@
 </nav>
 
 <main>
+  <!-- ───────── home ───────── -->
+  <section class="hero" id="home" aria-labelledby="hero-h">
+    <div class="hero-copy">
+      <h1 id="hero-h">Santa Claude</h1>
+      <p>Holiday hoodies and knit sweaters for people who ship code in December. Sixteen designs, sizes S to 2XL.</p>
+      <div class="hero-cta">
+        <a class="pill-btn hero-btn" href="#all">Shop the collection</a>
+        <span class="hero-deal">Buy 2, save 15%</span>
+      </div>
+    </div>
+    <div class="hero-pics" aria-hidden="true">
+      <a href="#santa-hoodie" tabindex="-1"><img src="assets/p/santa-hoodie.jpg" alt="" fetchpriority="high"></a>
+      <a href="#context-full" tabindex="-1"><img src="assets/p/context-full.jpg" alt=""></a>
+      <a href="#compact-knit" tabindex="-1"><img src="assets/p/compact-knit.jpg" alt=""></a>
+      <a href="#green-build" tabindex="-1"><img src="assets/p/green-build.jpg" alt=""></a>
+    </div>
+  </section>
+
   <!-- ───────── product ───────── -->
-  <section class="pdp" id="pdp" aria-label="Hoodie">
+  <section class="pdp" id="pdp" aria-label="Product" hidden>
+    <a class="back-link" href="#all">← All designs</a>
     <div class="gallery">
       <div class="stage" role="button" tabindex="-1" aria-label="Turn the hoodie around">
         <div class="stage-seal" aria-hidden="true"></div>
@@ -62,7 +81,7 @@
 
     <div class="info">
       <p class="pdp-badge" hidden></p>
-      <h1 class="pdp-name">Santa Claude hoodie</h1>
+      <h2 class="pdp-name">Santa Claude hoodie</h2>
       <p class="pdp-price">$72</p>
       <p class="pdp-blurb"></p>
 
@@ -192,6 +211,6 @@
   </div>
 </dialog>
 
-<script src="js/shop.js?v=3"></script>
+<script src="js/shop.js?v=5"></script>
 </body>
 </html>

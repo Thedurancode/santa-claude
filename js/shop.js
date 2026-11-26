@@ -238,7 +238,7 @@
     var card = e.target.closest('.card'); if (!card) return;
     var q = e.target.closest('.quick button');
     if (q) { add(card.dataset.id, q.dataset.size, 1); q.classList.add('done'); setTimeout(function () { q.classList.remove('done'); }, 900); openBag(); return; }
-    if (e.target.closest('.card-pic')) choose(byId[card.dataset.id], true);
+    if (e.target.closest('.card-pic')) location.hash = card.dataset.id;
   });
 
   /* ───────── bag drawer ───────── */
@@ -362,7 +362,26 @@
   /* ───────── go ───────── */
   if (S.freeShippingOver > 0) $('.announce-text').textContent = 'Free US shipping over ' + money(S.freeShippingOver) + '. Buy ' + S.bundle.qty + ', save ' + S.bundle.percentOff + '%.';
   drawStage(); drawInfo(); drawBag();
-  track('view', [{ id: cur.id, name: cur.name, price: cur.price, qty: 1 }]);
+  // Home shows the hero and the collection; a product opens only when one is picked (#product-id).
+  var hero = $('#home'), moreHead = $('#all-h');
+  var route = function (first) {
+    var p = byId[(location.hash || '').slice(1)];
+    if (p) {
+      hero.hidden = true; pdp.hidden = false;
+      moreHead.textContent = 'More designs';
+      if (p !== cur) choose(p); else track('view', [{ id: p.id, name: p.name, price: p.price, qty: 1 }]);
+      document.title = p.name + ' · ' + S.brand;
+      window.scrollTo(0, 0);
+    } else {
+      hero.hidden = false; pdp.hidden = true; sticky.classList.remove('on');
+      moreHead.textContent = 'The collection';
+      document.title = S.brand + ': holiday hoodies for developers';
+      $$('.card').forEach(function (c) { c.classList.remove('is-current'); });
+      if (location.hash === '#all' && !first) $('#all').scrollIntoView();
+    }
+  };
+  window.addEventListener('hashchange', function () { route(false); });
+  route(true);
   // Product data for Google Shopping / rich results
   var ld = { '@context': 'https://schema.org', '@graph': S.products.map(function (p) { return { '@type': 'Product', name: p.name, description: p.blurb, brand: { '@type': 'Brand', name: S.brand }, image: new URL(p.photos ? p.photos[0] : 'assets/og.jpg', location.href).href, offers: { '@type': 'Offer', price: p.price, priceCurrency: S.currency, availability: 'https://schema.org/InStock', url: location.href.split('#')[0] + '#' + p.id } }; }) };
   var sc = document.createElement('script'); sc.type = 'application/ld+json'; sc.textContent = JSON.stringify(ld); document.head.appendChild(sc);
