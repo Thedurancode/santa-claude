@@ -222,7 +222,7 @@
   $('.grid').innerHTML = S.products.map(function (p) {
     return '<article class="card' + (p === cur ? ' is-current' : '') + (p.photos ? ' photo' : '') + '" data-id="' + p.id + '" data-type="' + (p.type || 'hoodie') + '" style="--tint:' + p.body + '">' +
       '<button class="card-pic" type="button" aria-label="See the ' + esc(p.name) + '">' + '<span class="card-front">' + picture(p, 'front') + '</span>' + (hasBack(p) ? '<span class="card-back">' + picture(p, 'back') + '</span>' : '') + (p.badge ? '<span class="card-badge">' + esc(p.badge) + '</span>' : '') + '</button>' +
-      '<div class="card-row"><h3>' + esc(p.name) + '</h3><p>' + money(p.price) + '</p></div>' +
+      '<div class="card-row"><h3>' + esc(p.name.replace(/\s+(hoodie|knit sweater|sweater)$/i, '')) + '</h3><p>' + money(p.price) + '</p></div>' +
       '</article>';
   }).join('');
   // filter chips
