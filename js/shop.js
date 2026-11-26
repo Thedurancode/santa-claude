@@ -413,22 +413,38 @@
       return;
     }
 
-    busy(true, 'Sending…');
-    inbox('Santa Claude order hold: ' + count() + ' item(s), ' + money(total()), { name: name, email: email })
-      .then(function () {
-        var held = items(bag), heldTotal = total();
-        bag = []; save(); drawBag();
-        showThanks({
-          kicker: 'Order <b>held</b>',
-          title: 'Thanks, ' + name.split(' ')[0] + '. Your sizes are saved.',
-          lead: 'We’ll email <b>' + esc(email) + '</b> a secure payment link within one business day. Nothing is charged until you pay.',
-          items: held, total: heldTotal, totalLabel: 'Order total',
-          steps: [['Order held', 'Your sizes are set aside'], ['Payment link', 'Sent to your email within one business day'], ['On its way', 'Ships 2–3 business days after payment, with tracking']]
-        });
-      })
-      .catch(function () { err.textContent = 'That didn’t send. Check your connection and try again.'; err.hidden = false; })
-      .then(function () { busy(false, 'Hold my order'); });
+    // Show the thank-you at once; the email goes out in the background and is
+    // retried later (even on the next visit) if the connection drops.
+    var held = items(bag), heldTotal = total();
+    queueHold({ subject: 'Santa Claude order hold: ' + count() + ' item(s), ' + money(total()), order: orderText(), total: money(total()), name: name, email: email, utm: utm(), at: Date.now() });
+    bag = []; save(); drawBag();
+    showThanks({
+      kicker: 'Order <b>held</b>',
+      title: 'Thanks, ' + name.split(' ')[0] + '. Your sizes are saved.',
+      lead: 'We’ll email <b>' + esc(email) + '</b> a secure payment link within one business day. Nothing is charged until you pay.',
+      items: held, total: heldTotal, totalLabel: 'Order total',
+      steps: [['Order held', 'Your sizes are set aside'], ['Payment link', 'Sent to your email within one business day'], ['On its way', 'Ships 2–3 business days after payment, with tracking']]
+    });
   });
+
+  // Outbox for hold requests: send now, keep until the inbox service confirms.
+  var OUT = 'sc-outbox';
+  var readOut = function () { try { return JSON.parse(localStorage.getItem(OUT) || '[]'); } catch (x) { return []; } };
+  var writeOut = function (list) { try { localStorage.setItem(OUT, JSON.stringify(list)); } catch (x) {} };
+  var flushing = false;
+  var flushHolds = function () {
+    if (flushing || !C.holdEmail) return;
+    var list = readOut(); if (!list.length) return;
+    flushing = true;
+    var h = list[0], data = { _subject: h.subject, _template: 'table', _captcha: 'false', name: h.name, email: h.email, _replyto: h.email, order: h.order, total: h.total };
+    Object.keys(h.utm || {}).forEach(function (k) { data[k] = h.utm[k]; });
+    fetch('https://formsubmit.co/ajax/' + C.holdEmail, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(data) })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); writeOut(readOut().filter(function (x) { return x.at !== h.at; })); flushing = false; flushHolds(); })
+      .catch(function () { flushing = false; setTimeout(flushHolds, 15000); });
+  };
+  var queueHold = function (h) { var list = readOut(); list.push(h); writeOut(list.slice(-20)); flushHolds(); };
+  flushHolds();
+  window.addEventListener('online', flushHolds);
 
   // Coming back from Stripe
   (function () {
