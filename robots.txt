@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://thedurancode.github.io/santa-claude/sitemap.xml
