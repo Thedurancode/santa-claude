@@ -223,7 +223,6 @@
     return '<article class="card' + (p === cur ? ' is-current' : '') + (p.photos ? ' photo' : '') + '" data-id="' + p.id + '" data-type="' + (p.type || 'hoodie') + '" style="--tint:' + p.body + '">' +
       '<button class="card-pic" type="button" aria-label="See the ' + esc(p.name) + '">' + '<span class="card-front">' + picture(p, 'front') + '</span>' + (hasBack(p) ? '<span class="card-back">' + picture(p, 'back') + '</span>' : '') + (p.badge ? '<span class="card-badge">' + esc(p.badge) + '</span>' : '') + '</button>' +
       '<div class="card-row"><h3>' + esc(p.name) + '</h3><p>' + money(p.price) + '</p></div>' +
-      '<div class="quick" role="group" aria-label="Quick add ' + esc(p.name) + '">' + S.sizes.map(function (s) { return '<button type="button" data-size="' + s + '" aria-label="Add ' + esc(p.name) + ', size ' + s + '">' + s + '</button>'; }).join('') + '</div>' +
       '</article>';
   }).join('');
   // filter chips
@@ -240,9 +239,7 @@
   } else filters.hidden = true;
   $('.grid').addEventListener('click', function (e) {
     var card = e.target.closest('.card'); if (!card) return;
-    var q = e.target.closest('.quick button');
-    if (q) { add(card.dataset.id, q.dataset.size, 1); q.classList.add('done'); setTimeout(function () { q.classList.remove('done'); }, 900); openBag(); return; }
-    if (e.target.closest('.card-pic')) location.hash = card.dataset.id;
+    location.hash = card.dataset.id;
   });
 
   /* ───────── bag drawer ───────── */
