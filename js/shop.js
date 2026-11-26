@@ -103,7 +103,7 @@
   };
   window.shopHoodie = hoodie;
   var picture = function (p, view) {
-    if (p.photos && p.photos.length) return '<img src="' + p.photos[view === 'back' ? 1 : 0] + '" alt="' + esc(p.name) + '">';
+    if (p.photos && p.photos.length) return '<img src="' + p.photos[view === 'back' && p.photos[1] ? 1 : 0] + '" alt="' + esc(p.name) + (view === 'back' ? ', back' : '') + '" loading="' + (p === cur ? 'eager' : 'lazy') + '" decoding="async">';
     return hoodie(p, view);
   };
 
@@ -125,10 +125,16 @@
 
   /* ───────── product page ───────── */
   var cur = byId[(location.hash || '').slice(1)] || S.products[0], view = 'front', size = null;
+  var hasBack = function (p) { return !p.photos || p.photos.length > 1; };
   var pdp = $('#pdp');
   var stage = $('.stage', pdp), stageArt = $('.stage-art', pdp);
   var drawStage = function (animate) {
     stage.style.setProperty('--tint', cur.body); stage.style.setProperty('--ink', cur.ink);
+    if (!hasBack(cur)) view = 'front';
+    stage.classList.toggle('photo', !!cur.photos);
+    stage.classList.toggle('one-side', !hasBack(cur));
+    stage.setAttribute('aria-label', hasBack(cur) ? 'Turn it around' : cur.name);
+    $('.views', pdp).hidden = !hasBack(cur);
     stageArt.innerHTML = picture(cur, view);
     $$('.view-btn', pdp).forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.view === view); b.innerHTML = picture(cur, b.dataset.view) + '<span>' + (b.dataset.view === 'back' ? 'Back' : 'Front') + '</span>'; });
     if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) { stageArt.classList.remove('swap'); void stageArt.offsetWidth; stageArt.classList.add('swap'); }
@@ -141,9 +147,12 @@
     $('.pdp-badge', pdp).hidden = !cur.badge;
     $('.sticky-name').textContent = cur.name;
     $('.sticky-price').textContent = money(cur.price);
-    $('.swatches', pdp).innerHTML = S.products.map(function (p) {
-      return '<button class="swatch" type="button" role="radio" aria-checked="' + (p === cur) + '" data-id="' + p.id + '" style="--c:' + p.body + '" aria-label="' + esc(p.name) + '"></button>';
+    var row = $('.swatches', pdp), keep = row.scrollLeft;
+    row.innerHTML = S.products.map(function (p) {
+      return '<button class="swatch" type="button" role="radio" aria-checked="' + (p === cur) + '" data-id="' + p.id + '" style="--c:' + p.body + '" aria-label="' + esc(p.name) + '">' + (p.photos ? '<img src="' + p.photos[0] + '" alt="" loading="lazy" decoding="async">' : '') + '</button>';
     }).join('');
+    row.scrollLeft = keep;
+    $('.details', pdp).innerHTML = ((S.details[cur.type] || S.details.hoodie) || []).map(function (d, i) { return '<details' + (i === 0 ? ' open' : '') + '><summary>' + esc(d[0]) + '</summary><p>' + esc(d[1]) + '</p></details>'; }).join('');
     $('.swatch-name', pdp).textContent = cur.name;
   };
   var setSize = function (s) {
@@ -162,7 +171,6 @@
   };
 
   $('.sizes', pdp).innerHTML = S.sizes.map(function (s) { return '<button class="size" type="button" role="radio" aria-checked="false" data-size="' + s + '">' + s + '</button>'; }).join('');
-  $('.details', pdp).innerHTML = S.details.map(function (d, i) { return '<details' + (i === 0 ? ' open' : '') + '><summary>' + esc(d[0]) + '</summary><p>' + esc(d[1]) + '</p></details>'; }).join('');
   $('.ship-note', pdp).textContent = S.shipsIn;
   $('.ret-note', pdp).textContent = S.returns;
   $('.cut-note', pdp).textContent = S.holidayCutoff; $('.cutoff').textContent = S.holidayCutoff + '.';
@@ -179,11 +187,12 @@
     else if (t.classList.contains('size')) setSize(t.dataset.size);
     else if (t.classList.contains('view-btn')) { if (view !== t.dataset.view) { view = t.dataset.view; drawStage(true); } }
   });
-  stage.addEventListener('click', function () { view = view === 'front' ? 'back' : 'front'; drawStage(true); });
+  var flip = function () { if (!hasBack(cur)) return; view = view === 'front' ? 'back' : 'front'; drawStage(true); };
+  stage.addEventListener('click', flip);
   // swipe the stage on phones to turn the hoodie
   var sx = null;
   stage.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
-  stage.addEventListener('touchend', function (e) { if (sx === null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) { view = view === 'front' ? 'back' : 'front'; drawStage(true); } });
+  stage.addEventListener('touchend', function (e) { if (sx === null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) { if (hasBack(cur)) return flip(); var i = S.products.indexOf(cur), n = S.products.length; choose(S.products[(i + (dx < 0 ? 1 : -1) + n) % n]); } });
 
   var needSize = function () {
     var h = $('.size-hint', pdp); h.hidden = false;
@@ -207,12 +216,24 @@
 
   /* ───────── collection ───────── */
   $('.grid').innerHTML = S.products.map(function (p) {
-    return '<article class="card' + (p === cur ? ' is-current' : '') + '" data-id="' + p.id + '" style="--tint:' + p.body + '">' +
-      '<button class="card-pic" type="button" aria-label="See the ' + esc(p.name) + '">' + '<span class="card-front">' + picture(p, 'front') + '</span><span class="card-back">' + picture(p, 'back') + '</span>' + (p.badge ? '<span class="card-badge">' + esc(p.badge) + '</span>' : '') + '</button>' +
+    return '<article class="card' + (p === cur ? ' is-current' : '') + (p.photos ? ' photo' : '') + '" data-id="' + p.id + '" data-type="' + (p.type || 'hoodie') + '" style="--tint:' + p.body + '">' +
+      '<button class="card-pic" type="button" aria-label="See the ' + esc(p.name) + '">' + '<span class="card-front">' + picture(p, 'front') + '</span>' + (hasBack(p) ? '<span class="card-back">' + picture(p, 'back') + '</span>' : '') + (p.badge ? '<span class="card-badge">' + esc(p.badge) + '</span>' : '') + '</button>' +
       '<div class="card-row"><h3>' + esc(p.name) + '</h3><p>' + money(p.price) + '</p></div>' +
       '<div class="quick" role="group" aria-label="Quick add ' + esc(p.name) + '">' + S.sizes.map(function (s) { return '<button type="button" data-size="' + s + '" aria-label="Add ' + esc(p.name) + ', size ' + s + '">' + s + '</button>'; }).join('') + '</div>' +
       '</article>';
   }).join('');
+  // filter chips
+  var types = {}; S.products.forEach(function (p) { types[p.type || 'hoodie'] = (types[p.type || 'hoodie'] || 0) + 1; });
+  var LABEL = { hoodie: 'Hoodies', sweater: 'Knit sweaters' };
+  var filters = $('.filters');
+  if (Object.keys(types).length > 1) {
+    filters.innerHTML = '<button type="button" aria-pressed="true" data-f="all">All <span>' + S.products.length + '</span></button>' + Object.keys(types).map(function (t) { return '<button type="button" aria-pressed="false" data-f="' + t + '">' + (LABEL[t] || t) + ' <span>' + types[t] + '</span></button>'; }).join('');
+    filters.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      $$('button', filters).forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
+      $$('.card').forEach(function (c) { c.hidden = b.dataset.f !== 'all' && c.dataset.type !== b.dataset.f; });
+    });
+  } else filters.hidden = true;
   $('.grid').addEventListener('click', function (e) {
     var card = e.target.closest('.card'); if (!card) return;
     var q = e.target.closest('.quick button');
@@ -343,6 +364,6 @@
   drawStage(); drawInfo(); drawBag();
   track('view', [{ id: cur.id, name: cur.name, price: cur.price, qty: 1 }]);
   // Product data for Google Shopping / rich results
-  var ld = { '@context': 'https://schema.org', '@graph': S.products.map(function (p) { return { '@type': 'Product', name: p.name, description: p.blurb, brand: { '@type': 'Brand', name: S.brand }, image: location.href.split('#')[0].replace(/shop\.html.*$/, '') + 'assets/og-shop.jpg', offers: { '@type': 'Offer', price: p.price, priceCurrency: S.currency, availability: 'https://schema.org/InStock', url: location.href.split('#')[0] + '#' + p.id } }; }) };
+  var ld = { '@context': 'https://schema.org', '@graph': S.products.map(function (p) { return { '@type': 'Product', name: p.name, description: p.blurb, brand: { '@type': 'Brand', name: S.brand }, image: new URL(p.photos ? p.photos[0] : 'assets/og.jpg', location.href).href, offers: { '@type': 'Offer', price: p.price, priceCurrency: S.currency, availability: 'https://schema.org/InStock', url: location.href.split('#')[0] + '#' + p.id } }; }) };
   var sc = document.createElement('script'); sc.type = 'application/ld+json'; sc.textContent = JSON.stringify(ld); document.head.appendChild(sc);
 })();
