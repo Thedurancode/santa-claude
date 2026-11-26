@@ -13,10 +13,14 @@
    GET  /admin/orders     paid orders and held orders
    GET  /admin/settings   pixels, server tokens and product changes
    PUT  /admin/settings
+   POST /mcp              MCP server (Streamable HTTP) so AI agents can read stats and change
+                          prices, products and pixels. Needs the MCP_TOKEN secret; send it as
+                          "Authorization: Bearer <token>" or as ?key=<token> on the URL.
 
    Bindings and settings (Cloudflare → Worker → Settings; mark keys as Secret):
      DB                      D1 database binding (stores visits, orders, settings)
      ADMIN_PASSWORD          password for the admin panel
+     MCP_TOKEN               key for AI agents using /mcp (long and random)
      STRIPE_SECRET_KEY       sk_test_… or sk_live_…
      SITE_URL                https://thedurancode.github.io/santa-claude/
      STRIPE_WEBHOOK_SECRET   whsec_… from the Stripe webhook you create
@@ -41,6 +45,7 @@ export default {
     const url = new URL(req.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
     if (path === '/webhook') return webhook(req, env, ctx);
+    if (path === '/mcp') return mcp(req, env);
 
     const site = new URL(env.SITE_URL);
     const origin = req.headers.get('Origin') || '';
@@ -111,6 +116,11 @@ const ID = /^[A-Za-z0-9_\-]{0,80}$/;
 async function saveSettings(req, env, h) {
   if (!(await ensure(env))) return json({ error: 'Database not connected' }, 500, h);
   let b; try { b = await req.json(); } catch (e) { return json({ error: 'Bad request' }, 400, h); }
+  const r = await writeSettings(env, b);
+  return r.error ? json({ error: r.error }, 400, h) : json(Object.assign({ saved: true }, redact(r.settings)), 200, h);
+}
+// Shared by the admin panel and the MCP tools.
+async function writeSettings(env, b) {
   const cur = await getSettings(env);
   const bad = [];
   const pick = (src, keys, max, rx) => { const o = {}; keys.forEach(k => { const v = clip(src && src[k], max).trim(); if (rx && v && !rx.test(v)) bad.push(k); o[k] = v; }); return o; };
@@ -133,9 +143,9 @@ async function saveSettings(req, env, h) {
     });
     cur.products = p;
   }
-  if (bad.length) return json({ error: 'Check these fields: ' + bad.join(', ') }, 400, h);
+  if (bad.length) return { error: 'Check these fields: ' + bad.join(', ') };
   await env.DB.prepare("INSERT INTO settings (k, v) VALUES ('site', ?1) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(JSON.stringify(cur)).run();
-  return json(Object.assign({ saved: true }, redact(cur)), 200, h);
+  return { settings: cur };
 }
 // Tokens are write-only from the admin panel: it sees whether one is set, never the value.
 const redact = s => Object.assign({}, s, { server: Object.fromEntries(Object.entries(s.server).map(([k, v]) => [k, v ? '•••• ' + v.slice(-4) : ''])) });
@@ -280,6 +290,160 @@ async function orders(env, h) {
   if (!(await ensure(env))) return json({ error: 'Database not connected' }, 500, h);
   const r = await env.DB.prepare('SELECT * FROM orders ORDER BY ts DESC LIMIT 300').all();
   return json({ orders: r.results.map(o => Object.assign(o, { items: (() => { try { return JSON.parse(o.items || '[]'); } catch (e) { return []; } })() })) }, 200, h);
+}
+
+/* ───────── MCP server for AI agents ─────────
+   JSON-RPC over Streamable HTTP (plain JSON responses, no streaming). Tools
+   reuse the same code as the admin panel, so an agent sees and changes exactly
+   what the panel does. */
+const MCP_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+const PIXEL_PROPS = {
+  metaPixelId: 'Meta (Facebook/Instagram) pixel ID', tiktokPixelId: 'TikTok pixel ID', ga4Id: 'Google Analytics 4 measurement ID, G-…',
+  googleAdsId: 'Google Ads ID, AW-…', googleAdsPurchaseLabel: 'Google Ads purchase conversion label', gtmId: 'Google Tag Manager ID, GTM-…',
+  pinterestTagId: 'Pinterest tag ID', snapPixelId: 'Snapchat pixel ID'
+};
+const SERVER_PROPS = {
+  metaCapiToken: 'Meta Conversions API access token', metaTestEventCode: 'Meta test event code',
+  tiktokEventsToken: 'TikTok Events API access token', ga4ApiSecret: 'GA4 Measurement Protocol API secret'
+};
+const str = d => ({ type: 'string', description: d });
+const MCP_TOOLS = () => [
+  { name: 'get_overview', title: 'Store overview',
+    description: 'Sales and traffic for a period: visitors, orders, revenue, conversion rate, the visit-to-sale funnel, countries, cities (with coordinates), traffic sources, campaigns, devices, referring sites and views/adds/sales per design. Includes the previous period for comparison. Revenue is in USD.',
+    annotations: { readOnlyHint: true },
+    inputSchema: { type: 'object', properties: { days: { type: 'integer', minimum: 1, maximum: 365, description: '1 = today so far, 7 = last 7 days (default), 30, 90…' }, timezone_offset_minutes: { type: 'integer', description: 'Minutes east of UTC for day boundaries, e.g. -300 for US Eastern in winter. Default 0 (UTC).' } } } },
+  { name: 'get_live', title: 'Live visitors',
+    description: 'Visitors on the shop in the last 5 minutes, the cities they are in (last 30 minutes), and the latest 60 visitor events from the past 24 hours (page views, design views, adds to bag, checkouts, purchases) with source and place.',
+    annotations: { readOnlyHint: true }, inputSchema: { type: 'object', properties: {} } },
+  { name: 'list_orders', title: 'List orders',
+    description: 'Orders, newest first. kind "paid" = paid through Stripe; "hold" = shopper left name and email to hold sizes while payment was off; "started" = went to payment but did not finish (good for follow-up emails). Includes name, email, items, total, traffic source and place.',
+    annotations: { readOnlyHint: true },
+    inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['paid', 'hold', 'started', 'all'], description: 'Default "all"' }, limit: { type: 'integer', minimum: 1, maximum: 300, description: 'Default 50' } } } },
+  { name: 'list_products', title: 'List products',
+    description: 'Every design in the shop: id, name, type, default price, current price, badge, whether it is shown on the shop, and any pixels set just for that design. Use the id with update_product.',
+    annotations: { readOnlyHint: true }, inputSchema: { type: 'object', properties: {} } },
+  { name: 'update_product', title: 'Update a product',
+    description: 'Change one design. Only the fields you pass change. The shop shows the change within about a minute, and checkout charges the new price. Pass price null to go back to the default price; badge "" for the default badge or "-" for no badge; empty string clears a pixel.',
+    annotations: { destructiveHint: false, idempotentHint: true },
+    inputSchema: { type: 'object', required: ['id'], properties: {
+      id: { type: 'string', enum: Object.keys(CATALOG.products), description: 'Design id from list_products' },
+      price: { type: ['number', 'null'], exclusiveMinimum: 0, description: 'Price in USD' },
+      badge: { type: 'string', maxLength: 24, description: 'Short label on the product card, e.g. "Bestseller"' },
+      hidden: { type: 'boolean', description: 'true hides the design from the shop and blocks checkout for it' },
+      metaPixelId: str('Extra Meta pixel that gets this design\'s events'), tiktokPixelId: str('Extra TikTok pixel for this design'), googleAdsLabel: str('Google Ads conversion label for sales of this design')
+    } } },
+  { name: 'get_tracking_settings', title: 'Tracking settings',
+    description: 'The ad pixel IDs loaded on the shop, and which server-side conversion tokens are saved (tokens are never revealed, only their last 4 characters).',
+    annotations: { readOnlyHint: true }, inputSchema: { type: 'object', properties: {} } },
+  { name: 'update_tracking_settings', title: 'Update tracking settings',
+    description: 'Set ad pixel IDs and server-side conversion tokens. Only the fields you pass change. Empty string switches a pixel off; for tokens pass "-" to remove one. The shop picks up pixel changes within about a minute.',
+    annotations: { destructiveHint: false, idempotentHint: true },
+    inputSchema: { type: 'object', properties: Object.assign(
+      Object.fromEntries(Object.entries(PIXEL_PROPS).map(([k, d]) => [k, str(d)])),
+      Object.fromEntries(Object.entries(SERVER_PROPS).map(([k, d]) => [k, str(d + ' (write-only)')]))) } },
+  { name: 'build_tracking_link', title: 'Build a tracking link',
+    description: 'Make a shop link tagged with UTM parameters for an ad, post or email, so its visitors and sales show up under that campaign in get_overview.',
+    annotations: { readOnlyHint: true },
+    inputSchema: { type: 'object', required: ['source', 'campaign'], properties: {
+      source: str('Where the link is posted, e.g. facebook, tiktok, instagram, newsletter'),
+      medium: { type: 'string', description: 'paid (default), social, email or influencer' },
+      campaign: str('Campaign name, e.g. xmas-launch'),
+      product: { type: 'string', enum: Object.keys(CATALOG.products), description: 'Land on this design instead of the home page' }
+    } } }
+];
+
+async function mcpCall(name, a, env) {
+  a = a || {};
+  const site = new URL(env.SITE_URL);
+  const viaAdmin = async fn => { const r = await fn; const j = await r.json(); if (r.status >= 400) throw new Error(j.error || 'Failed'); return j; };
+  if (name === 'get_overview') {
+    const u = new URL('https://x/admin/stats'); u.searchParams.set('days', a.days || 7); u.searchParams.set('tz', a.timezone_offset_minutes || 0);
+    return viaAdmin(stats(u, env, {}));
+  }
+  if (name === 'get_live') return viaAdmin(live(env, {}));
+  if (name === 'list_orders') {
+    const all = (await viaAdmin(orders(env, {}))).orders;
+    const k = a.kind && a.kind !== 'all' ? a.kind : null;
+    const list = all.filter(o => !k || o.kind === k).slice(0, Math.max(1, Math.min(300, a.limit || 50)));
+    return { count: list.length, orders: list.map(o => Object.assign({}, o, { date: new Date(o.ts).toISOString() })) };
+  }
+  const s = await getSettings(env);
+  const productList = st => Object.entries(CATALOG.products).map(([id, p]) => {
+    const o = st.products[id] || {};
+    return { id, name: p.name, default_price: p.price, price: o.price || p.price, badge: o.badge || null, shown_on_shop: !o.hidden, pixels: { metaPixelId: o.metaPixelId || '', tiktokPixelId: o.tiktokPixelId || '', googleAdsLabel: o.googleAdsLabel || '' }, url: new URL('#' + id, site).href };
+  });
+  if (name === 'list_products') return { currency: CATALOG.currency.toUpperCase(), products: productList(s) };
+  if (name === 'get_tracking_settings') return { pixels: s.pixels, server_tokens: redact(s).server };
+  if (name === 'update_product') {
+    if (!CATALOG.products[a.id]) throw new Error('Unknown product id. Use list_products.');
+    const next = JSON.parse(JSON.stringify(s.products)), o = next[a.id] || {};
+    if ('price' in a) { if (a.price == null || a.price === '') delete o.price; else o.price = a.price; }
+    if ('badge' in a) { if (a.badge) o.badge = a.badge; else delete o.badge; }
+    if ('hidden' in a) { if (a.hidden) o.hidden = true; else delete o.hidden; }
+    ['metaPixelId', 'tiktokPixelId', 'googleAdsLabel'].forEach(k => { if (k in a) { if (a[k]) o[k] = a[k]; else delete o[k]; } });
+    next[a.id] = o;
+    const r = await writeSettings(env, { products: next });
+    if (r.error) throw new Error(r.error);
+    return { saved: true, product: productList(r.settings).find(p => p.id === a.id) };
+  }
+  if (name === 'update_tracking_settings') {
+    const pixels = Object.assign({}, s.pixels), server = {};
+    Object.keys(PIXEL_PROPS).forEach(k => { if (k in a) pixels[k] = String(a[k] || ''); });
+    Object.keys(SERVER_PROPS).forEach(k => { if (k in a) server[k] = String(a[k] || ''); });
+    const r = await writeSettings(env, { pixels, server });
+    if (r.error) throw new Error(r.error);
+    return { saved: true, pixels: r.settings.pixels, server_tokens: redact(r.settings).server };
+  }
+  if (name === 'build_tracking_link') {
+    const slug = v => String(v || '').trim().toLowerCase().replace(/\s+/g, '-');
+    const u = new URL(site.href);
+    u.searchParams.set('utm_source', slug(a.source)); u.searchParams.set('utm_medium', slug(a.medium || 'paid')); u.searchParams.set('utm_campaign', slug(a.campaign));
+    if (a.product && CATALOG.products[a.product]) u.hash = a.product;
+    return { url: u.href };
+  }
+  throw new Error('Unknown tool: ' + name);
+}
+
+async function mcp(req, env) {
+  const H = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version', 'Access-Control-Expose-Headers': 'Mcp-Session-Id' };
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: H });
+  if (!env.MCP_TOKEN) return json({ error: 'Set the MCP_TOKEN secret on the server to switch on agent access' }, 503, H);
+  const given = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '') || new URL(req.url).searchParams.get('key') || '';
+  const [g, w] = await Promise.all([hmac('mcp', given), hmac('mcp', env.MCP_TOKEN)]);
+  if (!given || g !== w) return json({ error: 'Missing or wrong MCP token' }, 401, Object.assign({ 'WWW-Authenticate': 'Bearer realm="santa-claude"' }, H));
+  if (req.method === 'DELETE') return new Response(null, { status: 204, headers: H });
+  if (req.method !== 'POST') return new Response('This MCP server answers POST requests only', { status: 405, headers: Object.assign({ Allow: 'POST' }, H) });
+  let body; try { body = await req.json(); } catch (e) { return json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400, H); }
+  await ensure(env);
+  const one = async m => {
+    if (!m || m.jsonrpc !== '2.0' || typeof m.method !== 'string') return { jsonrpc: '2.0', id: m && m.id != null ? m.id : null, error: { code: -32600, message: 'Invalid request' } };
+    if (m.id === undefined || m.id === null) return null; // notification
+    const ok = result => ({ jsonrpc: '2.0', id: m.id, result });
+    const p = m.params || {};
+    switch (m.method) {
+      case 'initialize': return ok({
+        protocolVersion: MCP_VERSIONS.includes(p.protocolVersion) ? p.protocolVersion : MCP_VERSIONS[0],
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: { name: 'santa-claude-store', title: 'Santa Claude store', version: '1.0.0' },
+        instructions: 'Santa Claude is a holiday hoodie and knit sweater shop for developers. Use get_overview for sales and traffic, get_live for who is on the site now, list_orders for orders and abandoned checkouts, list_products / update_product to change prices, badges and visibility, and get_tracking_settings / update_tracking_settings for ad pixels. Changes go live on the shop within about a minute. Money is USD.'
+      });
+      case 'ping': return ok({});
+      case 'tools/list': return ok({ tools: MCP_TOOLS() });
+      case 'tools/call': {
+        if (!MCP_TOOLS().some(t => t.name === p.name)) return { jsonrpc: '2.0', id: m.id, error: { code: -32602, message: 'Unknown tool: ' + p.name } };
+        try {
+          const data = await mcpCall(p.name, p.arguments, env);
+          return ok({ content: [{ type: 'text', text: JSON.stringify(data, null, 1) }], structuredContent: data });
+        } catch (e) {
+          return ok({ content: [{ type: 'text', text: 'Error: ' + (e && e.message || e) }], isError: true });
+        }
+      }
+      default: return { jsonrpc: '2.0', id: m.id, error: { code: -32601, message: 'Method not found: ' + m.method } };
+    }
+  };
+  const out = Array.isArray(body) ? (await Promise.all(body.map(one))).filter(Boolean) : await one(body);
+  if (!out || (Array.isArray(out) && !out.length)) return new Response(null, { status: 202, headers: H });
+  return json(out, 200, H);
 }
 
 /* ───────── checkout session ───────── */

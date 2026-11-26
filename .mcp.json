@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "santa-claude": {
+      "type": "http",
+      "url": "${SANTA_CLAUDE_API}/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SANTA_CLAUDE_MCP_TOKEN}"
+      }
+    }
+  }
+}

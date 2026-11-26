@@ -440,7 +440,11 @@
       '<label>Type<select name="u_medium"><option value="paid">Paid ad</option><option value="social">Post</option><option value="email">Email</option><option value="influencer">Influencer</option></select></label>' +
       '<label>Campaign name<input name="u_campaign" placeholder="xmas-launch"></label>' +
       '<label>Lands on<select name="u_page"><option value="">Home page</option>' + (S.products || []).map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join('') + '</select></label>' +
-      '</div><div class="frow"><label style="grid-column:1/-1">Your link<input name="u_out" readonly></label></div><p><button class="btn ghost small" type="button" id="u-copy">Copy link</button></p></fieldset>';
+      '</div><div class="frow"><label style="grid-column:1/-1">Your link<input name="u_out" readonly></label></div><p><button class="btn ghost small" type="button" id="u-copy">Copy link</button></p></fieldset>' +
+      '<fieldset><legend>AI agents (MCP)</legend><p class="lead">Agents such as Claude can read sales and traffic, list orders, change prices, badges and visibility, and set pixels through this MCP server. They need the MCP key (the <code>MCP_TOKEN</code> secret on the server).</p><div class="frow">' +
+      '<label style="grid-column:1/-1">Server URL<input name="m_url" readonly value="' + esc(API ? API + '/mcp' : 'Available once the store server is connected') + '"></label>' +
+      '<label style="grid-column:1/-1">Add to Claude Code<input name="m_cmd" readonly value="' + esc(API ? 'claude mcp add --transport http santa-claude ' + API + '/mcp --header "Authorization: Bearer YOUR_MCP_KEY"' : '') + '"></label>' +
+      '</div></fieldset>';
     var build = function () {
       var g = function (n) { return f.elements[n].value.trim(); }, q = [];
       var slug = function (v) { return encodeURIComponent(v.toLowerCase().replace(/\s+/g, '-')); };

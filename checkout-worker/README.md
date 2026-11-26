@@ -6,6 +6,7 @@ The shop is a static site. This small Cloudflare Worker does everything that nee
   and city, what they looked at, held and paid orders, and the pixel and product settings.
 - **Stripe Checkout**: builds each payment page. Prices come from the catalog or from a price
   set in the admin panel, never from the browser.
+- **MCP server** (`/mcp`): lets AI agents run the shop. See below.
 - **Server-side conversions**: reports every paid order to Meta, TikTok and GA4, so ad
   blockers can't hide a sale.
 
@@ -25,6 +26,7 @@ npx wrangler d1 create santa-claude     # prints a database_id
    ```sh
    npx wrangler secret put ADMIN_PASSWORD       # the password for /admin/, make it long
    npx wrangler secret put STRIPE_SECRET_KEY    # sk_live_… (or sk_test_… to try it out)
+   npx wrangler secret put MCP_TOKEN            # key for AI agents, e.g. from: openssl rand -hex 32
    ```
 3. Deploy:
    ```sh
@@ -60,6 +62,33 @@ python3 ../tools/build_worker.py && npx wrangler deploy
 ```
 
 Prices, badges and hiding a design can be changed in the admin panel without this.
+
+## AI agents (MCP)
+
+`<your server URL>/mcp` is a remote MCP server (Streamable HTTP). Agents send the key as
+`Authorization: Bearer <MCP_TOKEN>`, or as `?key=<MCP_TOKEN>` on the URL for clients that
+can't set headers. Tools:
+
+| Tool | What it does |
+| --- | --- |
+| `get_overview` | Visitors, orders, revenue, conversion, funnel, countries, cities, sources, campaigns, per-design stats for N days |
+| `get_live` | Who is on the shop now and the latest visitor activity |
+| `list_orders` | Paid orders, held orders and unfinished checkouts, with name, email and source |
+| `list_products` | Every design with default and current price, badge, visibility, pixels |
+| `update_product` | Change a design's price, badge, visibility or per-design pixels |
+| `get_tracking_settings` | Pixel IDs, and which server tokens are saved |
+| `update_tracking_settings` | Set pixel IDs and conversion tokens |
+| `build_tracking_link` | Make a UTM-tagged link for an ad, post or email |
+
+Connect Claude Code:
+
+```sh
+claude mcp add --transport http santa-claude https://santa-claude.<you>.workers.dev/mcp \
+  --header "Authorization: Bearer <MCP_TOKEN>"
+```
+
+Inside this repo, `.mcp.json` does the same once `SANTA_CLAUDE_API` (the server URL) and
+`SANTA_CLAUDE_MCP_TOKEN` are set in your environment. To revoke access, set a new `MCP_TOKEN`.
 
 ## Checking it
 

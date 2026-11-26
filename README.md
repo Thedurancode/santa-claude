@@ -1,9 +1,33 @@
 # Santa Claude
 
-Hoodies for developers. A static store hosted on GitHub Pages at
-https://thedurancode.github.io/santa-claude/. To publish a change, commit and push to `main`.
+Holiday hoodies and knit sweaters for developers. A stand-alone shop with its own repo,
+hosting, server and admin panel.
 
-- `js/shop-config.js` is the only file you need to edit. It holds the products, prices, colours, the bundle discount, the free-shipping threshold, the Christmas cutoff, the size chart, checkout settings and pixel IDs.
-- **Checkout:** set `checkout.shopifyDomain` and give each product `variants: { S: 'id', M: 'id', ... }`. The bag then sends shoppers straight to Shopify checkout (Shop Pay, Apple Pay and Google Pay) through a cart permalink, carrying UTM and click IDs along. Until that's set, "Check out" opens a "Hold my order" form that emails the order to `checkout.holdEmail` through FormSubmit. The first submission triggers a one-time activation email to that address.
-- **Pixels:** `js/pixels.js` loads Meta, TikTok, GA4, GTM, Pinterest and Snap, but only the ones with an ID filled in. It sends ViewContent, AddToCart, InitiateCheckout, Lead and Purchase events. Track purchases with Shopify's own Meta, TikTok and Google apps, since the purchase happens on Shopify's checkout.
-- **Pictures:** the hoodies are SVG drawings made from each product's colours (see PRINTS in `js/shop.js`). To use real photos, add `photos: ['front.jpg', 'back.jpg']` to a product.
+| Part | Where |
+| --- | --- |
+| Shop | https://thedurancode.github.io/santa-claude/ (GitHub Pages; publish by pushing to `main`) |
+| Admin panel | `/admin/` on the shop. Preview it with sample data at `/admin/?demo` |
+| Store server | `checkout-worker/`, a Cloudflare Worker with a D1 database: Stripe checkout, visitor stats, settings, conversion reporting |
+| MCP server | `<store server>/mcp`, so AI agents can read sales and traffic and change products and pixels |
+
+## Files
+
+- `js/shop-config.js`: designs, default prices, bundle discount, shipping, size chart, and
+  the store server URL (`api` and `checkout.stripeEndpoint`).
+- `js/pixels.js`: ad pixels (Meta, TikTok, GA4, Google Ads, GTM, Pinterest, Snap) and the
+  visit tracking that feeds the admin panel. Pixel IDs come from the admin panel.
+- `js/shop.js`: the shop itself (home, product pages, bag, checkout, thank-you).
+- `admin/`: the admin panel.
+- `checkout-worker/`: the store server. Setup, secrets and the MCP tools are in its README.
+- `tools/build_worker.py`: copies products and prices from `shop-config.js` into the server.
+
+## Run it locally
+
+```sh
+python3 -m http.server 4180
+```
+
+Then open http://127.0.0.1:4180/ (shop) or http://127.0.0.1:4180/admin/?demo (admin preview).
+
+Until the store server is deployed, checkout takes "hold my order" requests and emails them to
+`checkout.holdEmail`.
