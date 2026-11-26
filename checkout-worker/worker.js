@@ -42,6 +42,86 @@ const CATALOG = {
     "2XL"
   ],
   "products": {
+    "santa-hoodie": {
+      "name": "Santa Claude hoodie",
+      "price": 68.0,
+      "photo": "assets/p/santa-hoodie.jpg"
+    },
+    "compact-hoodie": {
+      "name": "Claude /compact hoodie",
+      "price": 68.0,
+      "photo": "assets/p/compact-hoodie.jpg"
+    },
+    "wishlist-hoodie": {
+      "name": "Claude Wrote My Wishlist hoodie",
+      "price": 68.0,
+      "photo": "assets/p/wishlist-hoodie.jpg"
+    },
+    "snow-hoodie": {
+      "name": "let it snow hoodie",
+      "price": 68.0,
+      "photo": "assets/p/snow-hoodie.jpg"
+    },
+    "prompt-actually": {
+      "name": "Prompt Actually hoodie",
+      "price": 68.0,
+      "photo": "assets/p/prompt-actually.jpg"
+    },
+    "ship-friday": {
+      "name": "Ship It on Friday hoodie",
+      "price": 68.0,
+      "photo": "assets/p/ship-friday.jpg"
+    },
+    "silent-night": {
+      "name": "Silent Night, Loud Bugs hoodie",
+      "price": 68.0,
+      "photo": "assets/p/silent-night.jpg"
+    },
+    "vibe-xmas": {
+      "name": "Vibe Coding Till Xmas hoodie",
+      "price": 68.0,
+      "photo": "assets/p/vibe-xmas.jpg"
+    },
+    "one-more-prompt": {
+      "name": "Just One More Prompt hoodie",
+      "price": 68.0,
+      "photo": "assets/p/one-more-prompt.jpg"
+    },
+    "context-full": {
+      "name": "Context Window Full hoodie",
+      "price": 68.0,
+      "photo": "assets/p/context-full.jpg"
+    },
+    "agent-workshop": {
+      "name": "Agent Workshop hoodie",
+      "price": 68.0,
+      "photo": "assets/p/agent-workshop.jpg"
+    },
+    "green-build": {
+      "name": "All I Want Is One Green Build hoodie",
+      "price": 68.0,
+      "photo": "assets/p/green-build.jpg"
+    },
+    "santa-knit": {
+      "name": "Santa Claude knit sweater",
+      "price": 84.0,
+      "photo": "assets/p/santa-knit.jpg"
+    },
+    "compact-knit": {
+      "name": "Claude /compact knit sweater",
+      "price": 84.0,
+      "photo": "assets/p/compact-knit.jpg"
+    },
+    "wishlist-knit": {
+      "name": "Claude Wrote My Wishlist knit sweater",
+      "price": 84.0,
+      "photo": "assets/p/wishlist-knit.jpg"
+    },
+    "snow-knit": {
+      "name": "let it snow knit sweater",
+      "price": 84.0,
+      "photo": "assets/p/snow-knit.jpg"
+    },
     "works-on-my-machine": {
       "name": "It Works On My Machine hoodie",
       "price": 64.0,

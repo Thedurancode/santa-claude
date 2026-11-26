@@ -209,7 +209,7 @@
   $('.ship-note', pdp).textContent = S.shipsIn;
   $('.ret-note', pdp).textContent = S.returns;
   // the quote ticker: every product's quote, twice over so the loop is seamless
-  var tick = S.products.map(function (p) { return '<span>' + esc((p.back || p.front).map(function (l) { return l.replace(/^\^/, '').trim(); }).join(' ')) + '</span>'; }).join('');
+  var tick = S.products.filter(function (p) { return p.front; }).map(function (p) { return '<span>' + esc((p.back || p.front).map(function (l) { return l.replace(/^\^/, '').trim(); }).join(' ')) + '</span>'; }).join('');
   $$('.ticker-run').forEach(function (t) { t.innerHTML = tick + tick; });
   // home: four designs, mixing fronts and backs, hoodies and tees
   var heroPicks = ['works-on-my-machine', 'hello-world', 'merge-conflicts', 'exit-zero'].map(function (id) { return byId[id]; }).filter(Boolean);

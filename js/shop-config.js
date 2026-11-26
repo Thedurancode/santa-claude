@@ -48,7 +48,42 @@ window.SHOP = {
   // type: 'hoodie', 'tee' or 'sweater' (knit, with binary bands; `bits` sets the digits) · body: garment colour · ink / ink2: print colours
   // font: 'mono', 'sans' (heavy block letters) or 'pix' (pixel)
   // image: picture used by Stripe, search engines and link previews
+  // photos: a product with photos shows them instead of a drawing
   products: [
+    // ── Your original designs (mockup photos) ──
+    { id: 'santa-hoodie', name: 'Santa Claude hoodie', type: 'hoodie', price: 68, body: '#EDE3D3', photos: ['assets/p/santa-hoodie.jpg'],
+      blurb: 'The original. A pixel Santa Claude dropping down the chimney, in brick red on oatmeal.', badge: 'Original', variants: {} },
+    { id: 'compact-hoodie', name: 'Claude /compact hoodie', type: 'hoodie', price: 68, body: '#2B2B2D', photos: ['assets/p/compact-hoodie.jpg'],
+      blurb: 'Santa sitting on a suitcase that won’t close. Everyone who has run /compact knows the feeling.', badge: '', variants: {} },
+    { id: 'wishlist-hoodie', name: 'Claude Wrote My Wishlist hoodie', type: 'hoodie', price: 68, body: '#1F4A35', photos: ['assets/p/wishlist-hoodie.jpg'],
+      blurb: 'Every box already checked. Pine green with a fountain pen and a very long scroll.', badge: '', variants: {} },
+    { id: 'snow-hoodie', name: 'let it snow hoodie', type: 'hoodie', price: 68, body: '#B4502A', photos: ['assets/p/snow-hoodie.jpg'],
+      blurb: 'A beige CRT printing an asterisk Christmas tree after one command: > let it snow.', badge: '', variants: {} },
+    { id: 'prompt-actually', name: 'Prompt Actually hoodie', type: 'hoodie', price: 68, body: '#1E4A33', photos: ['assets/p/prompt-actually.jpg'],
+      blurb: 'A retro terminal with a pixel tree on screen and fairy lights around the base.', badge: '', variants: {} },
+    { id: 'ship-friday', name: 'Ship It on Friday hoodie', type: 'hoodie', price: 68, body: '#1B1B1C', photos: ['assets/p/ship-friday.jpg'],
+      blurb: 'Santa in sunglasses, carrying the deploy. For people who live dangerously in December.', badge: '', variants: {} },
+    { id: 'silent-night', name: 'Silent Night, Loud Bugs hoodie', type: 'hoodie', price: 68, body: '#1C2446', photos: ['assets/p/silent-night.jpg'],
+      blurb: 'A rubber duck in a Santa hat debugging by mug light while the bugs multiply.', badge: '', variants: {} },
+    { id: 'vibe-xmas', name: 'Vibe Coding Till Xmas hoodie', type: 'hoodie', price: 68, body: '#7A1C26', photos: ['assets/p/vibe-xmas.jpg'],
+      blurb: 'A gingerbread dev in headphones, shipping by the tree.', badge: '', variants: {} },
+    { id: 'one-more-prompt', name: 'Just One More Prompt hoodie', type: 'hoodie', price: 68, body: '#EAE0CF', photos: ['assets/p/one-more-prompt.jpg'],
+      blurb: 'An exhausted elf at 2 a.m., promising it’s the last one. It isn’t.', badge: '', variants: {} },
+    { id: 'context-full', name: 'Context Window Full hoodie', type: 'hoodie', price: 68, body: '#A9C8E8', photos: ['assets/p/context-full.jpg'],
+      blurb: 'A snowman squished against the window by too many presents. Ice blue.', badge: '', variants: {} },
+    { id: 'agent-workshop', name: 'Agent Workshop hoodie', type: 'hoodie', price: 68, body: '#6E1E2A', photos: ['assets/p/agent-workshop.jpg'],
+      blurb: 'Robot elves building a rocket under the workshop lights. Burgundy.', badge: '', variants: {} },
+    { id: 'green-build', name: 'All I Want Is One Green Build hoodie', type: 'hoodie', price: 68, body: '#1E4A33', photos: ['assets/p/green-build.jpg'],
+      blurb: 'A Christmas tree made of passing checks. The best present a team can get.', badge: '', variants: {} },
+    { id: 'santa-knit', name: 'Santa Claude knit sweater', type: 'sweater', price: 84, body: '#EFE6D6', photos: ['assets/p/santa-knit.jpg'],
+      blurb: 'The Santa Claude chimney scene, knitted, with fair isle trees and snowflakes.', badge: '', variants: {} },
+    { id: 'compact-knit', name: 'Claude /compact knit sweater', type: 'sweater', price: 84, body: '#333335', photos: ['assets/p/compact-knit.jpg'],
+      blurb: 'Charcoal knit with the overstuffed suitcase and a /compact command across the hem.', badge: '', variants: {} },
+    { id: 'wishlist-knit', name: 'Claude Wrote My Wishlist knit sweater', type: 'sweater', price: 84, body: '#24503A', photos: ['assets/p/wishlist-knit.jpg'],
+      blurb: 'Pine green knit, the wishlist scroll, and a border of trees and stars.', badge: '', variants: {} },
+    { id: 'snow-knit', name: 'let it snow knit sweater', type: 'sweater', price: 84, body: '#B34A26', photos: ['assets/p/snow-knit.jpg'],
+      blurb: 'Rust red knit with a terminal window full of snow and a little tree.', badge: '', variants: {} },
+    // ── Drawn designs: tech quotes ──
     { id: 'works-on-my-machine', name: 'It Works On My Machine hoodie', type: 'hoodie', price: 64, body: '#22252B', ink: '#F2F4F7', ink2: '#7EE787', font: 'mono',
       front: ['it works', '^on my machine'], back: ['IT WORKS', 'ON MY', '^MACHINE'], image: 'assets/p/works-on-my-machine.png',
       blurb: 'The oldest defence in software, on heavyweight charcoal fleece. Ship the machine.', badge: 'Bestseller', variants: {} },
