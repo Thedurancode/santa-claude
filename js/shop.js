@@ -179,6 +179,10 @@
   $('.knit-band').style.backgroundImage = knitUrl('#F3F5FA', '#E5323B', 4);
   $('.about-art').style.backgroundImage = knitUrl('#F3F5FA', '#E5323B', 10);
   $('.top-hat').innerHTML = '<svg viewBox="0 0 10 8" width="26" height="21" shape-rendering="crispEdges">' + pix(HAT, 0, 0, 1, { r: RED, w: '#161C40' }) + '</svg>';
+  $$('.top-hat').forEach(function (h, i) { if (i) h.innerHTML = $('.top-hat').innerHTML; });
+  $('.foot-knit').style.backgroundImage = knitUrl('#F3F5FA', '#E5323B', 4);
+  $('.foot-guide').addEventListener('click', function () { var g = $('#size-guide'); g.showModal ? g.showModal() : g.setAttribute('open', ''); });
+  $$('[data-filter]').forEach(function (a) { a.addEventListener('click', function () { var b = $('.filters button[data-f="' + a.dataset.filter + '"]'); if (b) b.click(); }); });
   $('.bundle-note', pdp).textContent = 'Buy ' + S.bundle.qty + ', save ' + S.bundle.percentOff + '% on each';
 
   pdp.addEventListener('click', function (e) {
@@ -377,7 +381,8 @@
       moreHead.textContent = 'The collection';
       document.title = S.brand + ': holiday hoodies for developers';
       $$('.card').forEach(function (c) { c.classList.remove('is-current'); });
-      if (location.hash === '#all' && !first) $('#all').scrollIntoView();
+      var t = location.hash.length > 1 && document.getElementById(location.hash.slice(1));
+      if (t && !first) t.scrollIntoView();
     }
   };
   window.addEventListener('hashchange', function () { route(false); });
