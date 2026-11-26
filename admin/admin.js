@@ -18,7 +18,7 @@
   var flag = function (cc) { return '<span class="cc">' + (cc && /^[A-Z]{2}$/i.test(cc) ? cc.toUpperCase() : '··') + '</span>'; };
   var byId = {}; (S.products || []).forEach(function (p) { byId[p.id] = p; });
   var pname = function (id) { return byId[id] ? byId[id].name : id; };
-  var short = function (id) { return pname(id).replace(/\s+(hoodie|tee|t-shirt)$/i, ''); };
+  var short = function (id) { return pname(id).replace(/\s+(hoodie|tee|t-shirt|knit sweater|sweater)$/i, ''); };
   var ago = function (ts) { var s = Math.max(0, (Date.now() - ts) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : s < 86400 ? Math.floor(s / 3600) + ' h ago' : new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
   var MEDIUM = { paid: 'Paid ads', cpc: 'Paid ads', organic: 'Search', social: 'Social', referral: 'Other sites', none: 'Typed in or bookmarked', email: 'Email', campaign: 'Campaign link' };
   var SRC = { 'hacker news': 'Hacker News', x: 'X', github: 'GitHub', tiktok: 'TikTok', linkedin: 'LinkedIn', youtube: 'YouTube' };
@@ -294,7 +294,7 @@
       .sort(function (a, b) { return b.revenue - a.revenue || b.viewed - a.viewed; });
     var vmax = d3max(rows, 'viewed');
     table($('#t-products'), [
-      { h: 'Design', f: function (r) { var p = byId[r.id] || {}; return '<div class="name">' + (p.image || p.photos ? '<img class="thumb" src="../' + esc(p.image || p.photos[0]) + '" alt="" loading="lazy">' : '') + '<div>' + esc(short(r.id)) + '<small>' + (p.type === 'tee' ? 'Tee' : 'Hoodie') + '</small></div></div>'; } },
+      { h: 'Design', f: function (r) { var p = byId[r.id] || {}; return '<div class="name">' + (p.image || p.photos ? '<img class="thumb" src="../' + esc(p.image || p.photos[0]) + '" alt="" loading="lazy">' : '') + '<div>' + esc(short(r.id)) + '<small>' + ({ tee: 'Tee', sweater: 'Knit sweater' }[p.type] || 'Hoodie') + '</small></div></div>'; } },
       { h: 'Views', f: function (r) { return num(r.viewed) + meter(r.viewed, vmax); } },
       { h: 'Added to bag', f: function (r) { return num(r.added); } },
       { h: 'Add rate', f: function (r) { return pctTxt(pct(r.added, r.viewed)); } },
@@ -375,7 +375,7 @@
       var o = po[p.id] || {};
       return '<div class="prow' + (o.hidden ? ' off' : '') + '" data-id="' + esc(p.id) + '">' +
         (p.image || p.photos ? '<img src="../' + esc(p.image || p.photos[0]) + '" alt="" loading="lazy">' : '<span></span>') +
-        '<p class="pname">' + esc(short(p.id)) + '<small>' + (p.type === 'tee' ? 'Tee' : 'Hoodie') + ', usually ' + money(p.price) + '</small></p>' +
+        '<p class="pname">' + esc(short(p.id)) + '<small>' + ({ tee: 'Tee', sweater: 'Knit sweater' }[p.type] || 'Hoodie') + ', usually ' + money(p.price) + '</small></p>' +
         '<label>Price ($)<input name="price" inputmode="decimal" placeholder="' + p.price + '" value="' + esc(o.price || '') + '"></label>' +
         '<label class="badge-f">Badge<input name="badge" maxlength="24" placeholder="' + esc(p.badge || 'None') + '" value="' + esc(o.badge || '') + '"></label>' +
         '<label class="toggle"><input type="checkbox" name="show"' + (o.hidden ? '' : ' checked') + '> On the shop</label>' +

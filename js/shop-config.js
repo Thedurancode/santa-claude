@@ -11,7 +11,7 @@
 */
 window.SHOP = {
   brand: 'Stack Threads',
-  tagline: 'Hoodies and tees for people who write code',
+  tagline: 'Hoodies, tees and knit sweaters for people who write code',
   currency: 'USD',
   freeShippingOver: 100,
   shippingFlat: 8,                     // dollars, charged under the free-shipping threshold
@@ -45,7 +45,7 @@ window.SHOP = {
 
   sizes: ['S', 'M', 'L', 'XL', '2XL'],
 
-  // type: 'hoodie' or 'tee' · body: garment colour · ink / ink2: print colours
+  // type: 'hoodie', 'tee' or 'sweater' (knit, with binary bands; `bits` sets the digits) · body: garment colour · ink / ink2: print colours
   // font: 'mono', 'sans' (heavy block letters) or 'pix' (pixel)
   // image: picture used by Stripe, search engines and link previews
   products: [
@@ -84,7 +84,19 @@ window.SHOP = {
       blurb: 'The infinite loop most of us actually run. Espresso brown.', badge: '', variants: {} },
     { id: 'dark-mode', name: 'Dark Mode Only tee', type: 'tee', price: 32, body: '#131518', ink: '#8B95A5', ink2: '#FFFFFF', font: 'sans',
       front: ['^dark mode'], back: ['DARK', 'MODE', '^ONLY'], image: 'assets/p/dark-mode.png',
-      blurb: 'Light themes need not apply. Black on black with a white hit.', badge: '', variants: {} }
+      blurb: 'Light themes need not apply. Black on black with a white hit.', badge: '', variants: {} },
+    { id: 'ctrl-z-knit', name: 'Ctrl+Z knit sweater', type: 'sweater', price: 84, body: '#2A2D34', ink: '#E8E9EC', ink2: '#FFD166', font: 'pix',
+      front: ['CTRL', '^+Z'], back: ['UNDO', '^EVERYTHING'], image: 'assets/p/ctrl-z-knit.png',
+      blurb: 'For the days you wish had version control. Charcoal knit with gold binary bands.', badge: '', variants: {} },
+    { id: 'cozy-mode-knit', name: 'Cozy Mode knit sweater', type: 'sweater', price: 84, body: '#2E4A3B', ink: '#F1E9DA', ink2: '#E0A458', font: 'pix',
+      front: ['COZY', 'MODE', '^ON'], back: ['cozy_mode', '^= true;'], image: 'assets/p/cozy-mode-knit.png',
+      blurb: 'A feature flag you can wear. Pine green knit, warm enough for a cold office.', badge: 'New', variants: {} },
+    { id: 'out-of-office-knit', name: 'Out Of Office knit sweater', type: 'sweater', price: 84, body: '#5C2230', ink: '#F7E7E1', ink2: '#F2C14E', font: 'pix',
+      front: ['OUT OF', '^OFFICE'], back: ['AUTO-REPLY:', '^AFK'], image: 'assets/p/out-of-office-knit.png',
+      blurb: 'Set your status in wool. Burgundy knit for days with no standup.', badge: '', variants: {} },
+    { id: 'binary-hi-knit', name: 'Binary Hi knit sweater', type: 'sweater', price: 84, body: '#E7DFD2', ink: '#22252B', ink2: '#2F5BFF', font: 'pix',
+      front: ['01001000', '^01001001'], back: ['HI', '^IN BINARY'], image: 'assets/p/binary-hi-knit.png', bits: '0100100001001001',
+      blurb: 'It says hi, if you can read it. Oatmeal knit with a blue byte.', badge: '', variants: {} }
   ],
 
   // Shown under the product, per type.
@@ -94,6 +106,12 @@ window.SHOP = {
       ['Fit', 'Relaxed, with dropped shoulders. Take your usual size; size down for a closer fit.'],
       ['Print', 'Screen printed, so it won’t crack or peel.'],
       ['Care', 'Wash cold inside out. Tumble dry low or hang dry.']
+    ],
+    sweater: [
+      ['Fabric', 'Knitted cotton-acrylic blend, warm without the itch.'],
+      ['Fit', 'Classic crew neck with ribbed cuffs and hem. Take your usual size.'],
+      ['Design', 'Knitted in, not printed, so it never fades or cracks.'],
+      ['Care', 'Hand wash or machine wash cold on a gentle cycle. Dry flat.']
     ],
     tee: [
       ['Fabric', '220 gsm combed cotton. Thick enough that it won’t go see-through, soft from the first wear.'],
@@ -106,6 +124,7 @@ window.SHOP = {
   // Chest width and body length in inches, laid flat, per type.
   sizeChart: {
     hoodie: [['S', 21, 27], ['M', 22.5, 28], ['L', 24, 29], ['XL', 25.5, 30], ['2XL', 27, 31]],
+    sweater: [['S', 20.5, 26.5], ['M', 22, 27.5], ['L', 23.5, 28.5], ['XL', 25, 29.5], ['2XL', 26.5, 30.5]],
     tee: [['S', 19, 28], ['M', 20.5, 29], ['L', 22, 30], ['XL', 23.5, 31], ['2XL', 25, 32]]
   }
 };

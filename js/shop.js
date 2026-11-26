@@ -62,8 +62,45 @@
               : quote(p.front, { x: 250, y: 124, w: 178, h: 150 }, p.font, p.ink, p.ink2);
     return s + finish(id, body) + '</svg>';
   };
+  // Knit sweater: crew neck, rib texture, and knitted bands of pixel binary digits.
+  var DIG = { '0': ['###', '#.#', '#.#', '#.#', '###'], '1': ['.#.', '##.', '.#.', '.#.', '###'] };
+  var px = function (x, y, s, c) { return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + (s + .3).toFixed(1) + '" height="' + (s + .3).toFixed(1) + '" fill="' + c + '"/>'; };
+  var knitBand = function (y, s, bits, c, c2) { // checker row, a row of binary digits, checker row
+    var out = '', x, i;
+    for (x = 120, i = 0; x < 380; x += s, i++) { if (i % 2 === 0) { out += px(x, y, s, c2); out += px(x + s, y + 8 * s, s, c2); } }
+    x = 250 - (bits.length * 4 * s - s) / 2;
+    bits.split('').forEach(function (b) { DIG[b].forEach(function (row, j) { for (var k = 0; k < 3; k++) if (row[k] === '#') out += px(x + k * s, y + 2 * s + j * s, s, c); }); x += 4 * s; });
+    return out;
+  };
+  var sweater = function (p, view) {
+    var id = 'k' + (uid++), b = p.body, back = view === 'back';
+    var line = shade(b) ? 'rgba(22,28,40,.16)' : 'rgba(0,0,0,.28)';
+    var sleeves = 'M168,104 C138,112 118,132 110,170 L84,430 L134,438 L158,236 Z M332,104 C362,112 382,132 390,170 L416,430 L366,438 L342,236 Z';
+    var cuffs = 'M84,430 L134,438 L131,476 L81,470 Z M416,430 L366,438 L369,476 L419,470 Z';
+    var torso = 'M168,104 C186,92 204,86 214,84 C230,96 270,96 286,84 C296,86 314,92 332,104 C340,140 346,200 348,250 L352,468 L148,468 L152,250 C154,200 160,140 168,104 Z';
+    var band = 'M148,468 L352,468 L351,504 L149,504 Z';
+    var neck = back ? 'M214,84 C232,92 268,92 286,84' : 'M214,84 C228,106 272,106 286,84';
+    var ribs = '';
+    for (var x = 156; x < 350; x += 6) ribs += 'M' + x + ',471 L' + x + ',501 ';
+    for (var c = 0; c < 6; c++) ribs += 'M' + (88 + c * 7.5) + ',' + (433 + c * 1.2) + ' L' + (85 + c * 7.5) + ',' + (471 + c * 1) + ' M' + (412 - c * 7.5) + ',' + (433 + c * 1.2) + ' L' + (415 - c * 7.5) + ',' + (471 + c * 1) + ' ';
+    var knitTex = ''; // faint vertical knit columns
+    for (x = 152; x < 350; x += 7) knitTex += 'M' + x + ',96 L' + x + ',466 ';
+    var bits = p.bits || '0110100001101001';
+    var s = '<svg class="hoodie-svg" viewBox="40 10 420 510" role="img" aria-label="' + esc(p.name) + ', ' + (back ? 'back' : 'front') + '">' + defs(id) +
+      '<clipPath id="' + id + 'c"><path d="' + torso + '"/></clipPath>' +
+      '<ellipse cx="250" cy="512" rx="190" ry="10" fill="#000" opacity=".12"/>' +
+      '<g fill="' + b + '" stroke="' + line + '" stroke-width="1.4" stroke-linejoin="round"><path d="' + sleeves + '"/><path d="' + cuffs + '"/><path d="' + torso + '"/><path d="' + band + '"/></g>' +
+      '<path d="' + ribs + '" stroke="' + line + '" stroke-width="1" fill="none"/>' +
+      '<g clip-path="url(#' + id + 'c)"><path d="' + knitTex + '" stroke="' + line + '" stroke-width=".8" stroke-dasharray="2 3" fill="none" opacity=".7"/>' +
+        knitBand(back ? 114 : 126, 2.8, bits, p.ink, p.ink2) + knitBand(414, 2.8, bits.split('').reverse().join(''), p.ink, p.ink2) + '</g>' +
+      '<path d="' + neck + '" stroke="' + line + '" stroke-width="9" fill="none" stroke-linecap="round"/><path d="' + neck + '" stroke="' + b + '" stroke-width="6" fill="none" stroke-linecap="round" opacity=".9"/>';
+    s += back ? quote(p.back || p.front, { x: 250, y: 172, w: 170, h: 214 }, p.font, p.ink, p.ink2)
+              : quote(p.front, { x: 250, y: 190, w: 170, h: 196 }, p.font, p.ink, p.ink2);
+    return s + finish(id, sleeves + ' ' + torso + ' ' + band + ' ' + cuffs) + '</svg>';
+  };
   var hoodie = function (p, view) {
     if (p.type === 'tee') return tee(p, view);
+    if (p.type === 'sweater') return sweater(p, view);
     var id = 'h' + (uid++), b = p.body, ink = p.ink, back = view === 'back';
     var line = shade(b) ? 'rgba(22,28,64,.16)' : 'rgba(0,0,0,.28)';
     var sleeves = 'M168,118 C138,124 118,142 110,178 L84,430 L134,438 L158,236 Z M332,118 C362,124 382,142 390,178 L416,430 L366,438 L342,236 Z';
@@ -219,12 +256,12 @@
   $('.grid').innerHTML = S.products.map(function (p) {
     return '<article class="card' + (p === cur ? ' is-current' : '') + (p.photos ? ' photo' : '') + '" data-id="' + p.id + '" data-type="' + (p.type || 'hoodie') + '" style="--tint:' + p.body + '">' +
       '<button class="card-pic" type="button" aria-label="See the ' + esc(p.name) + '">' + '<span class="card-front">' + picture(p, 'front') + '</span>' + (hasBack(p) ? '<span class="card-back">' + picture(p, 'back') + '</span>' : '') + (p.badge ? '<span class="card-badge">' + esc(p.badge) + '</span>' : '') + '</button>' +
-      '<div class="card-row"><h3>' + esc(p.name.replace(/\s+(hoodie|tee|t-shirt)$/i, '')) + '</h3><p>' + money(p.price) + '</p></div>' +
+      '<div class="card-row"><h3>' + esc(p.name.replace(/\s+(hoodie|tee|t-shirt|knit sweater|sweater)$/i, '')) + '</h3><p>' + money(p.price) + '</p></div>' +
       '</article>';
   }).join('');
   // filter chips
   var types = {}; S.products.forEach(function (p) { types[p.type || 'hoodie'] = (types[p.type || 'hoodie'] || 0) + 1; });
-  var LABEL = { hoodie: 'Hoodies', tee: 'Tees' };
+  var LABEL = { hoodie: 'Hoodies', tee: 'Tees', sweater: 'Knit sweaters' };
   var filters = $('.filters');
   if (Object.keys(types).length > 1) {
     filters.innerHTML = '<button type="button" aria-pressed="true" data-f="all">All <span>' + S.products.length + '</span></button>' + Object.keys(types).map(function (t) { return '<button type="button" aria-pressed="false" data-f="' + t + '">' + (LABEL[t] || t) + ' <span>' + types[t] + '</span></button>'; }).join('');
@@ -469,7 +506,7 @@
   var guide = $('#size-guide');
   var drawGuide = function () {
     var chart = Array.isArray(S.sizeChart) ? S.sizeChart : (S.sizeChart[cur.type] || S.sizeChart.hoodie);
-    $('#guide-h').textContent = 'Size guide: ' + (cur.type === 'tee' ? 'tees' : 'hoodies');
+    $('#guide-h').textContent = 'Size guide: ' + ({ tee: 'tees', sweater: 'knit sweaters' }[cur.type] || 'hoodies');
     $('tbody', guide).innerHTML = chart.map(function (r) { return '<tr><th scope="row">' + r[0] + '</th><td>' + r[1] + '″</td><td>' + r[2] + '″</td></tr>'; }).join('');
   };
   drawGuide();

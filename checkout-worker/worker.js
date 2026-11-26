@@ -101,6 +101,26 @@ const CATALOG = {
       "name": "Dark Mode Only tee",
       "price": 32.0,
       "photo": "assets/p/dark-mode.png"
+    },
+    "ctrl-z-knit": {
+      "name": "Ctrl+Z knit sweater",
+      "price": 84.0,
+      "photo": "assets/p/ctrl-z-knit.png"
+    },
+    "cozy-mode-knit": {
+      "name": "Cozy Mode knit sweater",
+      "price": 84.0,
+      "photo": "assets/p/cozy-mode-knit.png"
+    },
+    "out-of-office-knit": {
+      "name": "Out Of Office knit sweater",
+      "price": 84.0,
+      "photo": "assets/p/out-of-office-knit.png"
+    },
+    "binary-hi-knit": {
+      "name": "Binary Hi knit sweater",
+      "price": 84.0,
+      "photo": "assets/p/binary-hi-knit.png"
     }
   },
   "bundle": {
