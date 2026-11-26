@@ -4,19 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Santa Claude Admin</title>
+<title>Stack Threads Admin</title>
 <link rel="icon" href="../assets/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=Silkscreen:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin.css?v=1">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=JetBrains+Mono:wght@500..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css?v=2">
 </head>
 <body>
 
 <!-- sign in -->
 <main class="gate" id="gate" hidden>
   <form class="gate-card" id="gate-form">
-    <p class="logo"><span class="hat" aria-hidden="true"></span>Santa Claude</p>
+    <p class="logo"><span class="prompt" aria-hidden="true">&gt;</span>stack_threads</p>
     <h1>Store admin</h1>
     <div id="gate-live">
       <label for="pw">Password</label>
@@ -35,7 +35,7 @@
 <div class="app" id="app" hidden>
   <header class="top">
     <div class="top-row">
-      <a class="logo" href="../" title="Open the shop"><span class="hat" aria-hidden="true"></span>Santa Claude <span class="logo-sub">Admin</span></a>
+      <a class="logo" href="../" title="Open the shop"><span class="prompt" aria-hidden="true">&gt;</span>stack_threads <span class="logo-sub">Admin</span></a>
       <p class="live-pill" id="live-pill"><span class="dot" aria-hidden="true"></span><b id="live-n">0</b><span class="long"> on the site now</span><span class="short"> live</span></p>
       <button class="btn ghost small" type="button" id="sign-out">Sign out</button>
     </div>
@@ -161,9 +161,9 @@
 
 <div class="tip" id="tip" role="tooltip" hidden></div>
 
-<script src="../js/shop-config.js?v=16"></script>
+<script src="../js/shop-config.js?v=17"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
-<script src="admin.js?v=2"></script>
+<script src="admin.js?v=3"></script>
 </body>
 </html>

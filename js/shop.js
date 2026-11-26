@@ -1,7 +1,6 @@
-/* Santa Claude — hoodies for developers.
-   Product pictures are drawn as SVG from each product's colours in
-   shop-config.js, so a new colourway needs no photo shoot. Swap in real
-   photos later by adding `photos: ['front.jpg', 'back.jpg']` to a product. */
+/* Stack Threads: hoodies and tees for people who write code.
+   Products are drawn as SVG from shop-config.js, so a new design needs no
+   photo shoot. To use real photos instead, add `photos: ['front.jpg', 'back.jpg']`. */
 // Runs once js/pixels.js has the admin panel's settings (prices, hidden designs, pixels).
 (window.shopReady || function (f) { f(); })(function () {
   var S = window.SHOP, $ = function (s, r) { return (r || document).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
@@ -10,63 +9,63 @@
   var money = function (n) { return '$' + (Math.round(n * 100) / 100).toFixed(n % 1 ? 2 : 0); };
   var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
 
-  /* ───────── hoodie drawing ───────── */
-  var seal = function (cx, cy, r, fill, extra) {
-    var pts = [];
-    for (var k = 0; k < 32; k++) { var a = (-90 + k * 11.25) * Math.PI / 180, rr = k % 2 ? r * .924 : r; pts.push((cx + rr * Math.cos(a)).toFixed(1) + ',' + (cy + rr * Math.sin(a)).toFixed(1)); }
-    return '<polygon points="' + pts.join(' ') + '" fill="' + fill + '"' + (extra || '') + '/>';
-  };
-  var PIX = 'Silkscreen, monospace', MONO = 'JetBrains Mono, ui-monospace, monospace';
-  var T = function (x, y, size, txt, fill, w, font, anchor) {
-    return '<text x="' + x + '" y="' + y + '" font-size="' + size + '" fill="' + fill + '" text-anchor="' + (anchor || 'middle') + '" font-family="' + (font || PIX) + '" font-weight="700"' + (w ? ' textLength="' + w + '" lengthAdjust="spacingAndGlyphs"' : '') + '>' + txt + '</text>';
-  };
-  // pixel art: rows of characters, '#' = ink, 'g' = second ink, 'r' = candy red, 'w' = snow
-  var pix = function (rows, x0, y0, size, c) {
-    var out = '';
-    rows.forEach(function (row, j) {
-      for (var i = 0; i < row.length; i++) { var k = row[i]; if (c[k]) out += '<rect x="' + (x0 + i * size).toFixed(1) + '" y="' + (y0 + j * size).toFixed(1) + '" width="' + (size + .3).toFixed(1) + '" height="' + (size + .3).toFixed(1) + '" fill="' + c[k] + '"/>'; }
+  /* ───────── garment drawing ─────────
+     Hoodies and tees are drawn as SVG from each product's colours, with its
+     quote set to fill the print area. */
+  var MONO = '"JetBrains Mono", ui-monospace, monospace', SANS = 'Archivo, system-ui, sans-serif', PIX = 'Silkscreen, monospace';
+  var FONT = { mono: [MONO, 700, .6], sans: [SANS, 900, .64], pix: [PIX, 700, .72] };
+  // lines: strings, '^' prefix = accent colour. box: centre x, top y, width, height.
+  var quote = function (lines, box, font, ink, ink2) {
+    var f = FONT[font] || FONT.mono, cw = f[2], code = font !== 'sans';
+    var L = lines.map(function (l) { return { t: l.replace(/^\^/, ''), c: l.charAt(0) === '^' ? ink2 : ink }; });
+    var longest = Math.max.apply(null, L.map(function (l) { return l.t.length; }));
+    var sizes, gap;
+    if (code) { // code: one size, so columns line up; left-aligned when there is indentation
+      var one = Math.min(box.w / (longest * cw), box.h / (L.length * 1.3), 40);
+      sizes = L.map(function () { return one; }); gap = .3;
+    } else { // block type: each line as wide as the box allows, like a poster
+      sizes = L.map(function (l) { return Math.min(box.w / (Math.max(l.t.length, 2) * cw), box.h / L.length * 1.05); }); gap = .04;
+    }
+    var total = sizes.reduce(function (a, z) { return a + z * (1 + gap); }, 0) - sizes[sizes.length - 1] * gap;
+    if (total > box.h) { var k = box.h / total; sizes = sizes.map(function (z) { return z * k; }); total = box.h; }
+    var indent = code && L.some(function (l) { return /^\s/.test(l.t); });
+    var x = indent ? box.x - longest * cw * sizes[0] / 2 : box.x, y = box.y + (box.h - total) / 2, out = '';
+    L.forEach(function (l, i) {
+      y += sizes[i] * .8;
+      out += '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" font-size="' + sizes[i].toFixed(1) + '" fill="' + l.c + '" text-anchor="' + (indent ? 'start' : 'middle') + '" font-family=\'' + f[0] + '\' font-weight="' + f[1] + '" xml:space="preserve" style="white-space:pre">' + esc(l.t) + '</text>';
+      y += sizes[i] * (.2 + gap);
     });
     return out;
   };
-  var FLAKE = ['#..#..#', '.#.#.#.', '..###..', '#######', '..###..', '.#.#.#.', '#..#..#'];
-  var TREE7 = ['...#...', '..###..', '.#####.', '..###..', '.#####.', '#######', '...#...'];
-  var KNIT = (function () {
-    var rows = ['rrrrrrrrrrrrrrrr', '.r.r.r.r.r.r.r.r', '................'];
-    for (var i = 0; i < 7; i++) rows.push(FLAKE[i] + '.' + TREE7[i] + '.');
-    return rows.concat(['................', '.r.r.r.r.r.r.r.r', 'rrrrrrrrrrrrrrrr']);
-  })();
-  var knit = function (x0, y0, cols, size, c) { return pix(KNIT.map(function (r) { var o = ''; for (var i = 0; i < cols; i++) o += r[i % r.length]; return o; }), x0, y0, size, c); };
-  window.knitSVG = function (ink, red, size) { // one repeat of the knit band, for page decoration
-    size = size || 6;
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + 16 * size + '" height="' + KNIT.length * size + '" shape-rendering="crispEdges">' + pix(KNIT, 0, 0, size, { '#': ink, r: red }) + '</svg>';
-  };
-  var TREE = ['......g......', '.....ggg.....', '......#......', '.....###.....', '....##r##....', '...#######...', '....#####....', '...##r####...', '..#########..', '...####r##...', '..#########..', '.##r#####r##.', '#############', '.....###.....', '.....###.....'];
-  var HAT = ['.......ww.', '......rww.', '.....rr...', '....rrrr..', '...rrrrr..', '..rrrrrrr.', 'wwwwwwwwww', 'wwwwwwwwww'];
-  var BOX = ['..r...r..', '...r.r...', '####r####', '####r####', '.###r###.', '.###r###.', '.###r###.', '.###r###.'];
-  var RED = '#E5323B', SNOW = '#F3F5FA';
-  var PRINTS = {
-    sweater: {
-      front: function (ink, body, ink2) { return knit(155, 232, 38, 5, { '#': ink, r: ink2 }) + T(250, 322, 12, 'UGLY SWEATER.EXE', ink, 120); },
-      back: function (ink, body, ink2) { return pix(TREE, 185, 172, 10, { '#': ink, r: ink2, g: '#F4C542' }) + T(250, 366, 22, 'DEPLOY FREEZE', ink, 172); }
-    },
-    sleigh: {
-      front: function (ink) { return pix(HAT, 194, 230, 3.6, { r: RED, w: SNOW }); },
-      back: function (ink, body, ink2) { return pix(HAT, 232, 168, 3.6, { r: RED, w: SNOW }) + T(250, 236, 32, 'IT WORKS', ink, 168) + T(250, 284, 32, 'ON MY', ink, 104) + T(250, 344, 44, 'SLEIGH', ink2, 172); }
-    },
-    hotfix: {
-      front: function (ink, body, ink2) { return T(250, 256, 22, 'HO HO', ink, 100) + T(250, 284, 22, 'HOTFIX', ink2, 112); },
-      back: function (ink, body, ink2) { return T(170, 226, 15, '$ git commit -m', ink, 150, MONO, 'start') + T(170, 262, 25, '"ho ho ho"', ink2, 160, MONO, 'start') + T(170, 306, 15, '$ git push origin', ink, 160, MONO, 'start') + T(170, 338, 24, 'north-pole', ink, 160, MONO, 'start'); }
-    },
-    gift: {
-      front: function (ink, body, ink2) { return T(250, 250, 13, 'git push --gift', ink, 118, MONO) + pix(BOX, 232, 262, 4, { '#': ink, r: ink2 }); },
-      back: function (ink, body, ink2) { return T(172, 222, 20, 'if (nice) {', ink, 140, MONO, 'start') + T(196, 256, 20, 'ship(gift);', ink, 140, MONO, 'start') + T(172, 290, 20, '} else {', ink, 100, MONO, 'start') + T(196, 324, 20, 'ship(coal);', ink2, 140, MONO, 'start') + T(172, 358, 20, '}', ink, 0, MONO, 'start'); }
-    }
-  };
+  var shade = function (b) { var rgb = parseInt(b.slice(1), 16); return (0.299 * (rgb >> 16) + 0.587 * (rgb >> 8 & 255) + 0.114 * (rgb & 255)) > 170; };
   var uid = 0;
+  var finish = function (id, paths) { // fabric light and shadow over the whole garment
+    return '<path d="' + paths + '" fill="url(#' + id + 's)" style="mix-blend-mode:multiply" pointer-events="none"/><path d="' + paths + '" fill="url(#' + id + 'v)" pointer-events="none"/>';
+  };
+  var defs = function (id) {
+    return '<defs><linearGradient id="' + id + 's" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".2"/><stop offset=".3" stop-color="#000" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".07"/><stop offset=".72" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient>' +
+      '<linearGradient id="' + id + 'v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#000" stop-opacity=".14"/></linearGradient></defs>';
+  };
+  var tee = function (p, view) {
+    var id = 'g' + (uid++), b = p.body, back = view === 'back';
+    var line = shade(b) ? 'rgba(22,28,40,.18)' : 'rgba(0,0,0,.3)';
+    var body = 'M182,58 C204,70 228,76 250,76 C272,76 296,70 318,58 L390,86 C404,110 420,150 432,188 L374,212 L354,178 C352,260 352,380 356,490 L144,490 C148,380 148,260 146,178 L126,212 L68,188 C80,150 96,110 110,86 Z';
+    var neck = back ? 'M182,58 C206,72 294,72 318,58' : 'M182,58 C200,98 300,98 318,58';
+    var s = '<svg class="hoodie-svg" viewBox="40 10 420 510" role="img" aria-label="' + esc(p.name) + ', ' + (back ? 'back' : 'front') + '">' + defs(id) +
+      '<ellipse cx="250" cy="500" rx="180" ry="9" fill="#000" opacity=".12"/>' +
+      '<path d="' + body + '" fill="' + b + '" stroke="' + line + '" stroke-width="1.4" stroke-linejoin="round"/>' +
+      '<path d="M126,212 L68,188 M374,212 L432,188" stroke="' + line + '" stroke-width="1.2" fill="none"/>' +
+      '<path d="M128,203 L72,180 M372,203 L428,180 M146,478 L354,478" stroke="' + line + '" stroke-width="1" stroke-dasharray="3 3" fill="none"/>' +
+      '<path d="' + neck + '" stroke="' + line + '" stroke-width="7" fill="none" stroke-linecap="round"/>' +
+      '<path d="' + neck + '" stroke="' + b + '" stroke-width="4" fill="none" stroke-linecap="round" opacity=".85"/>';
+    s += back ? quote(p.back || p.front, { x: 250, y: 112, w: 200, h: 230 }, p.font, p.ink, p.ink2)
+              : quote(p.front, { x: 250, y: 124, w: 178, h: 150 }, p.font, p.ink, p.ink2);
+    return s + finish(id, body) + '</svg>';
+  };
   var hoodie = function (p, view) {
+    if (p.type === 'tee') return tee(p, view);
     var id = 'h' + (uid++), b = p.body, ink = p.ink, back = view === 'back';
-    var rgb = parseInt(b.slice(1), 16), light = (0.299 * (rgb >> 16) + 0.587 * (rgb >> 8 & 255) + 0.114 * (rgb & 255)) > 170;
-    var line = light ? 'rgba(22,28,64,.16)' : 'rgba(0,0,0,.28)';
+    var line = shade(b) ? 'rgba(22,28,64,.16)' : 'rgba(0,0,0,.28)';
     var sleeves = 'M168,118 C138,124 118,142 110,178 L84,430 L134,438 L158,236 Z M332,118 C362,124 382,142 390,178 L416,430 L366,438 L342,236 Z';
     var cuffs = 'M84,430 L134,438 L131,476 L81,470 Z M416,430 L366,438 L369,476 L419,470 Z';
     var torso = 'M168,118 C184,104 204,98 214,96 L286,96 C296,98 316,104 332,118 C340,150 346,200 348,250 L352,468 L148,468 L152,250 C154,200 160,150 168,118 Z';
@@ -76,9 +75,7 @@
     var ribs = '';
     for (var x = 156; x < 350; x += 7) ribs += 'M' + x + ',471 L' + x + ',501 ';
     for (var c = 0; c < 6; c++) ribs += 'M' + (88 + c * 7.5) + ',' + (433 + c * 1.2) + ' L' + (85 + c * 7.5) + ',' + (471 + c * 1) + ' M' + (412 - c * 7.5) + ',' + (433 + c * 1.2) + ' L' + (415 - c * 7.5) + ',' + (471 + c * 1) + ' ';
-    var s = '<svg class="hoodie-svg" viewBox="40 10 420 510" role="img" aria-label="' + esc(p.name) + ', ' + (back ? 'back' : 'front') + '">' +
-      '<defs><linearGradient id="' + id + 's" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".2"/><stop offset=".3" stop-color="#000" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".07"/><stop offset=".72" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient>' +
-      '<linearGradient id="' + id + 'v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#000" stop-opacity=".14"/></linearGradient></defs>' +
+    var s = '<svg class="hoodie-svg" viewBox="40 10 420 510" role="img" aria-label="' + esc(p.name) + ', ' + (back ? 'back' : 'front') + '">' + defs(id) +
       '<ellipse cx="250" cy="512" rx="190" ry="10" fill="#000" opacity=".12"/>' +
       '<g fill="' + b + '" stroke="' + line + '" stroke-width="1.4" stroke-linejoin="round">' +
         '<path d="' + sleeves + '"/><path d="' + cuffs + '"/><path d="' + torso + '"/><path d="' + band + '"/></g>' +
@@ -88,19 +85,19 @@
       s += '<path d="M182,372 L318,372 C322,400 330,430 334,458 L166,458 C170,430 178,400 182,372 Z" fill="' + b + '" stroke="' + line + '" stroke-width="1.6"/>' +
            '<path d="M188,378 L312,378" stroke="' + line + '" stroke-width="1" stroke-dasharray="3 3"/>';
     }
-    s += (back ? PRINTS[p.art].back(ink, b, p.ink2) : PRINTS[p.art].front(ink, b, p.ink2));
+    s += back ? quote(p.back || p.front, { x: 250, y: 164, w: 186, h: 226 }, p.font, ink, p.ink2)
+              : quote(p.front, { x: 250, y: 238, w: 172, h: 118 }, p.font, ink, p.ink2);
     s += '<path d="' + hood + '" fill="' + b + '" stroke="' + line + '" stroke-width="1.4"/>';
     if (back) {
       s += '<path d="M250,26 L250,144" stroke="' + line + '" stroke-width="1.4"/>';
     } else {
+      var cord = shade(b) ? '#15181D' : '#F2F4F7';
       s += '<path d="M198,116 C198,82 222,62 250,62 C278,62 302,82 302,116 C294,128 280,134 268,136 L250,158 L232,136 C220,134 206,128 198,116 Z" fill="#000" fill-opacity=".36"/>' +
            '<path d="M212,142 L250,176 L288,142 M232,136 L250,158 L268,136" stroke="' + line + '" stroke-width="1.3" fill="none" stroke-linejoin="round"/>' +
-           '<path d="M238,156 C237,178 232,198 230,218 M262,156 C263,178 268,198 270,218" stroke="' + ink + '" stroke-width="4" fill="none" stroke-linecap="round"/>' +
-           '<rect x="225.5" y="216" width="7" height="14" rx="2.5" fill="' + ink + '"/><rect x="267.5" y="216" width="7" height="14" rx="2.5" fill="' + ink + '"/>';
+           '<path d="M238,156 C237,178 232,198 230,218 M262,156 C263,178 268,198 270,218" stroke="' + cord + '" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+           '<rect x="225.5" y="216" width="7" height="14" rx="2.5" fill="' + cord + '"/><rect x="267.5" y="216" width="7" height="14" rx="2.5" fill="' + cord + '"/>';
     }
-    s += '<path d="' + sleeves + ' ' + torso + ' ' + band + ' ' + cuffs + '" fill="url(#' + id + 's)" style="mix-blend-mode:multiply" pointer-events="none"/>' +
-         '<path d="' + hood + ' ' + torso + '" fill="url(#' + id + 'v)" pointer-events="none"/>';
-    return s + '</svg>';
+    return s + finish(id, sleeves + ' ' + torso + ' ' + band + ' ' + cuffs + ' ' + hood) + '</svg>';
   };
   window.shopHoodie = hoodie;
   var picture = function (p, view) {
@@ -150,7 +147,7 @@
     $('.sticky-price').textContent = money(cur.price);
     var row = $('.swatches', pdp), keep = row.scrollLeft;
     row.innerHTML = S.products.map(function (p) {
-      return '<button class="swatch" type="button" role="radio" aria-checked="' + (p === cur) + '" data-id="' + p.id + '" style="--c:' + p.body + '" aria-label="' + esc(p.name) + '">' + (p.photos ? '<img src="' + p.photos[0] + '" alt="" loading="lazy" decoding="async">' : '') + '</button>';
+      return '<button class="swatch" type="button" role="radio" aria-checked="' + (p === cur) + '" data-id="' + p.id + '" style="--c:' + p.body + '" aria-label="' + esc(p.name) + '">' + (p.photos ? '<img src="' + p.photos[0] + '" alt="" loading="lazy" decoding="async">' : hoodie(p, 'front')) + '</button>';
     }).join('');
     row.scrollLeft = keep;
     $('.details', pdp).innerHTML = ((S.details[cur.type] || S.details.hoodie) || []).map(function (d, i) { return '<details' + (i === 0 ? ' open' : '') + '><summary>' + esc(d[0]) + '</summary><p>' + esc(d[1]) + '</p></details>'; }).join('');
@@ -174,15 +171,14 @@
   $('.sizes', pdp).innerHTML = S.sizes.map(function (s) { return '<button class="size" type="button" role="radio" aria-checked="false" data-size="' + s + '">' + s + '</button>'; }).join('');
   $('.ship-note', pdp).textContent = S.shipsIn;
   $('.ret-note', pdp).textContent = S.returns;
-  $('.cut-note', pdp).textContent = S.holidayCutoff; $('.cutoff').textContent = S.holidayCutoff + '.';
-  // knit decoration
-  var knitUrl = function (ink, red, size) { return 'url("data:image/svg+xml,' + encodeURIComponent(window.knitSVG(ink, red, size)) + '")'; };
-  $('.knit-band').style.backgroundImage = knitUrl('#F3F5FA', '#E5323B', 4);
-  $('.about-art').style.backgroundImage = knitUrl('#F3F5FA', '#E5323B', 10);
-  $('.top-hat').innerHTML = '<svg viewBox="0 0 10 8" width="26" height="21" shape-rendering="crispEdges">' + pix(HAT, 0, 0, 1, { r: RED, w: '#161C40' }) + '</svg>';
-  $$('.top-hat').forEach(function (h, i) { if (i) h.innerHTML = $('.top-hat').innerHTML; });
-  $('.foot-knit').style.backgroundImage = knitUrl('#F3F5FA', '#E5323B', 4);
-  $('.foot-guide').addEventListener('click', function () { var g = $('#size-guide'); g.showModal ? g.showModal() : g.setAttribute('open', ''); });
+  // the quote ticker: every product's quote, twice over so the loop is seamless
+  var tick = S.products.map(function (p) { return '<span>' + esc((p.back || p.front).map(function (l) { return l.replace(/^\^/, '').trim(); }).join(' ')) + '</span>'; }).join('');
+  $$('.ticker-run').forEach(function (t) { t.innerHTML = tick + tick; });
+  // home: four designs, mixing fronts and backs, hoodies and tees
+  var heroPicks = ['works-on-my-machine', 'hello-world', 'merge-conflicts', 'exit-zero'].map(function (id) { return byId[id]; }).filter(Boolean);
+  S.products.forEach(function (p) { if (heroPicks.length < 4 && heroPicks.indexOf(p) < 0) heroPicks.push(p); });
+  $('.hero-pics').innerHTML = heroPicks.map(function (p, i) { return '<a href="#' + p.id + '" tabindex="-1" style="--tint:' + p.body + '">' + picture(p, i === 2 ? 'back' : 'front') + '</a>'; }).join('');
+  $('.foot-guide').addEventListener('click', function () { drawGuide(); var g = $('#size-guide'); g.showModal ? g.showModal() : g.setAttribute('open', ''); });
   $$('[data-filter]').forEach(function (a) { a.addEventListener('click', function () { var b = $('.filters button[data-f="' + a.dataset.filter + '"]'); if (b) b.click(); }); });
   $('.bundle-note', pdp).textContent = 'Buy ' + S.bundle.qty + ', save ' + S.bundle.percentOff + '% on each';
 
@@ -223,12 +219,12 @@
   $('.grid').innerHTML = S.products.map(function (p) {
     return '<article class="card' + (p === cur ? ' is-current' : '') + (p.photos ? ' photo' : '') + '" data-id="' + p.id + '" data-type="' + (p.type || 'hoodie') + '" style="--tint:' + p.body + '">' +
       '<button class="card-pic" type="button" aria-label="See the ' + esc(p.name) + '">' + '<span class="card-front">' + picture(p, 'front') + '</span>' + (hasBack(p) ? '<span class="card-back">' + picture(p, 'back') + '</span>' : '') + (p.badge ? '<span class="card-badge">' + esc(p.badge) + '</span>' : '') + '</button>' +
-      '<div class="card-row"><h3>' + esc(p.name.replace(/\s+(hoodie|knit sweater|sweater)$/i, '')) + '</h3><p>' + money(p.price) + '</p></div>' +
+      '<div class="card-row"><h3>' + esc(p.name.replace(/\s+(hoodie|tee|t-shirt)$/i, '')) + '</h3><p>' + money(p.price) + '</p></div>' +
       '</article>';
   }).join('');
   // filter chips
   var types = {}; S.products.forEach(function (p) { types[p.type || 'hoodie'] = (types[p.type || 'hoodie'] || 0) + 1; });
-  var LABEL = { hoodie: 'Hoodies', sweater: 'Knit sweaters' };
+  var LABEL = { hoodie: 'Hoodies', tee: 'Tees' };
   var filters = $('.filters');
   if (Object.keys(types).length > 1) {
     filters.innerHTML = '<button type="button" aria-pressed="true" data-f="all">All <span>' + S.products.length + '</span></button>' + Object.keys(types).map(function (t) { return '<button type="button" aria-pressed="false" data-f="' + t + '">' + (LABEL[t] || t) + ' <span>' + types[t] + '</span></button>'; }).join('');
@@ -335,7 +331,6 @@
   var thanks = $('.thanks');
   var showThanks = function (o) {
     if (!drawer.hidden) { drawer.classList.remove('open'); document.documentElement.classList.remove('locked'); drawer.hidden = true; }
-    $('.thanks-knit', thanks).style.backgroundImage = knitUrl('#F3F5FA', '#E5323B', 3);
     $('.thanks-kicker', thanks).innerHTML = o.kicker;
     $('#thanks-h', thanks).textContent = o.title;
     $('.thanks-lead', thanks).innerHTML = o.lead;
@@ -414,7 +409,7 @@
     // Show the thank-you at once; the email goes out in the background and is
     // retried later (even on the next visit) if the connection drops.
     var held = items(bag), heldTotal = total();
-    queueHold({ subject: 'Santa Claude order hold: ' + count() + ' item(s), ' + money(total()), order: orderText(), total: money(total()), name: name, email: email, utm: utm(), at: Date.now() });
+    queueHold({ subject: S.brand + ' order hold: ' + count() + ' item(s), ' + money(total()), order: orderText(), total: money(total()), name: name, email: email, utm: utm(), at: Date.now() });
     bag = []; save(); drawBag();
     showThanks({
       kicker: 'Order <b>held</b>',
@@ -472,8 +467,13 @@
 
   /* ───────── size guide ───────── */
   var guide = $('#size-guide');
-  $('tbody', guide).innerHTML = S.sizeChart.map(function (r) { return '<tr><th scope="row">' + r[0] + '</th><td>' + r[1] + '″</td><td>' + r[2] + '″</td></tr>'; }).join('');
-  $('.guide-link', pdp).addEventListener('click', function () { guide.showModal ? guide.showModal() : guide.setAttribute('open', ''); });
+  var drawGuide = function () {
+    var chart = Array.isArray(S.sizeChart) ? S.sizeChart : (S.sizeChart[cur.type] || S.sizeChart.hoodie);
+    $('#guide-h').textContent = 'Size guide: ' + (cur.type === 'tee' ? 'tees' : 'hoodies');
+    $('tbody', guide).innerHTML = chart.map(function (r) { return '<tr><th scope="row">' + r[0] + '</th><td>' + r[1] + '″</td><td>' + r[2] + '″</td></tr>'; }).join('');
+  };
+  drawGuide();
+  $('.guide-link', pdp).addEventListener('click', function () { drawGuide(); guide.showModal ? guide.showModal() : guide.setAttribute('open', ''); });
   guide.addEventListener('click', function (e) { if (e.target === guide || e.target.closest('[data-close]')) guide.close ? guide.close() : guide.removeAttribute('open'); });
 
   /* ───────── go ───────── */
@@ -491,8 +491,8 @@
       window.scrollTo(0, 0);
     } else {
       hero.hidden = false; pdp.hidden = true; sticky.classList.remove('on');
-      moreHead.textContent = 'The collection';
-      document.title = S.brand + ': holiday hoodies for developers';
+      moreHead.textContent = 'All designs';
+      document.title = S.brand + ': ' + S.tagline.toLowerCase();
       $$('.card').forEach(function (c) { c.classList.remove('is-current'); });
       var t = location.hash.length > 1 && document.getElementById(location.hash.slice(1));
       if (t && !first) t.scrollIntoView();
@@ -501,6 +501,6 @@
   window.addEventListener('hashchange', function () { route(false); });
   route(true);
   // Product data for Google Shopping / rich results
-  var ld = { '@context': 'https://schema.org', '@graph': S.products.map(function (p) { return { '@type': 'Product', name: p.name, description: p.blurb, brand: { '@type': 'Brand', name: S.brand }, image: new URL(p.photos ? p.photos[0] : 'assets/og.jpg', location.href).href, offers: { '@type': 'Offer', price: p.price, priceCurrency: S.currency, availability: 'https://schema.org/InStock', url: location.href.split('#')[0] + '#' + p.id } }; }) };
+  var ld = { '@context': 'https://schema.org', '@graph': S.products.map(function (p) { return { '@type': 'Product', name: p.name, description: p.blurb, brand: { '@type': 'Brand', name: S.brand }, image: new URL(p.image || (p.photos ? p.photos[0] : 'assets/og.png'), location.href).href, offers: { '@type': 'Offer', price: p.price, priceCurrency: S.currency, availability: 'https://schema.org/InStock', url: location.href.split('#')[0] + '#' + p.id } }; }) };
   var sc = document.createElement('script'); sc.type = 'application/ld+json'; sc.textContent = JSON.stringify(ld); document.head.appendChild(sc);
 });

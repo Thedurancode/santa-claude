@@ -1,4 +1,4 @@
-/* Santa Claude admin panel. Talks to the store server (SHOP.api in js/shop-config.js).
+/* Stack Threads admin panel. Talks to the store server (SHOP.api in js/shop-config.js).
    Without a server, "Preview with sample data" shows the panel filled with made-up numbers. */
 (function () {
   var S = window.SHOP || { products: [] };
@@ -18,7 +18,7 @@
   var flag = function (cc) { return '<span class="cc">' + (cc && /^[A-Z]{2}$/i.test(cc) ? cc.toUpperCase() : '··') + '</span>'; };
   var byId = {}; (S.products || []).forEach(function (p) { byId[p.id] = p; });
   var pname = function (id) { return byId[id] ? byId[id].name : id; };
-  var short = function (id) { return pname(id).replace(/\s+(hoodie|knit sweater|sweater)$/i, ''); };
+  var short = function (id) { return pname(id).replace(/\s+(hoodie|tee|t-shirt)$/i, ''); };
   var ago = function (ts) { var s = Math.max(0, (Date.now() - ts) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : s < 86400 ? Math.floor(s / 3600) + ' h ago' : new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
   var MEDIUM = { paid: 'Paid ads', cpc: 'Paid ads', organic: 'Search', social: 'Social', referral: 'Other sites', none: 'Typed in or bookmarked', email: 'Email', campaign: 'Campaign link' };
   var SRC = { 'hacker news': 'Hacker News', x: 'X', github: 'GitHub', tiktok: 'TikTok', linkedin: 'LinkedIn', youtube: 'YouTube' };
@@ -294,7 +294,7 @@
       .sort(function (a, b) { return b.revenue - a.revenue || b.viewed - a.viewed; });
     var vmax = d3max(rows, 'viewed');
     table($('#t-products'), [
-      { h: 'Design', f: function (r) { var p = byId[r.id] || {}; return '<div class="name">' + (p.photos ? '<img class="thumb" src="../' + esc(p.photos[0]) + '" alt="" loading="lazy">' : '') + '<div>' + esc(short(r.id)) + '<small>' + (p.type === 'sweater' ? 'Knit sweater' : 'Hoodie') + '</small></div></div>'; } },
+      { h: 'Design', f: function (r) { var p = byId[r.id] || {}; return '<div class="name">' + (p.image || p.photos ? '<img class="thumb" src="../' + esc(p.image || p.photos[0]) + '" alt="" loading="lazy">' : '') + '<div>' + esc(short(r.id)) + '<small>' + (p.type === 'tee' ? 'Tee' : 'Hoodie') + '</small></div></div>'; } },
       { h: 'Views', f: function (r) { return num(r.viewed) + meter(r.viewed, vmax); } },
       { h: 'Added to bag', f: function (r) { return num(r.added); } },
       { h: 'Add rate', f: function (r) { return pctTxt(pct(r.added, r.viewed)); } },
@@ -374,8 +374,8 @@
     $('#plist').innerHTML = (S.products || []).map(function (p) {
       var o = po[p.id] || {};
       return '<div class="prow' + (o.hidden ? ' off' : '') + '" data-id="' + esc(p.id) + '">' +
-        (p.photos ? '<img src="../' + esc(p.photos[0]) + '" alt="" loading="lazy">' : '<span></span>') +
-        '<p class="pname">' + esc(short(p.id)) + '<small>' + (p.type === 'sweater' ? 'Knit sweater' : 'Hoodie') + ', usually ' + money(p.price) + '</small></p>' +
+        (p.image || p.photos ? '<img src="../' + esc(p.image || p.photos[0]) + '" alt="" loading="lazy">' : '<span></span>') +
+        '<p class="pname">' + esc(short(p.id)) + '<small>' + (p.type === 'tee' ? 'Tee' : 'Hoodie') + ', usually ' + money(p.price) + '</small></p>' +
         '<label>Price ($)<input name="price" inputmode="decimal" placeholder="' + p.price + '" value="' + esc(o.price || '') + '"></label>' +
         '<label class="badge-f">Badge<input name="badge" maxlength="24" placeholder="' + esc(p.badge || 'None') + '" value="' + esc(o.badge || '') + '"></label>' +
         '<label class="toggle"><input type="checkbox" name="show"' + (o.hidden ? '' : ' checked') + '> On the shop</label>' +
@@ -438,12 +438,12 @@
       '<fieldset><legend>Tracking link builder</legend><p class="lead">Use these links in your ads and posts so the Overview shows exactly which one brought each sale.</p><div class="frow">' +
       '<label>Source<input name="u_source" placeholder="facebook, tiktok, instagram, newsletter"></label>' +
       '<label>Type<select name="u_medium"><option value="paid">Paid ad</option><option value="social">Post</option><option value="email">Email</option><option value="influencer">Influencer</option></select></label>' +
-      '<label>Campaign name<input name="u_campaign" placeholder="xmas-launch"></label>' +
+      '<label>Campaign name<input name="u_campaign" placeholder="launch-week"></label>' +
       '<label>Lands on<select name="u_page"><option value="">Home page</option>' + (S.products || []).map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join('') + '</select></label>' +
       '</div><div class="frow"><label style="grid-column:1/-1">Your link<input name="u_out" readonly></label></div><p><button class="btn ghost small" type="button" id="u-copy">Copy link</button></p></fieldset>' +
       '<fieldset><legend>AI agents (MCP)</legend><p class="lead">Agents such as Claude can read sales and traffic, list orders, change prices, badges and visibility, and set pixels through this MCP server. They need the MCP key (the <code>MCP_TOKEN</code> secret on the server).</p><div class="frow">' +
       '<label style="grid-column:1/-1">Server URL<input name="m_url" readonly value="' + esc(API ? API + '/mcp' : 'Available once the store server is connected') + '"></label>' +
-      '<label style="grid-column:1/-1">Add to Claude Code<input name="m_cmd" readonly value="' + esc(API ? 'claude mcp add --transport http santa-claude ' + API + '/mcp --header "Authorization: Bearer YOUR_MCP_KEY"' : '') + '"></label>' +
+      '<label style="grid-column:1/-1">Add to Claude Code<input name="m_cmd" readonly value="' + esc(API ? 'claude mcp add --transport http stack-threads ' + API + '/mcp --header "Authorization: Bearer YOUR_MCP_KEY"' : '') + '"></label>' +
       '</div></fieldset>';
     var build = function () {
       var g = function (n) { return f.elements[n].value.trim(); }, q = [];
@@ -481,7 +481,7 @@
     var seed = 20261126, rnd = function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
     var pick = function (list) { var tot = list.reduce(function (s, x) { return s + x[x.length - 1]; }, 0), r = rnd() * tot; for (var i = 0; i < list.length; i++) { r -= list[i][list[i].length - 1]; if (r <= 0) return list[i]; } return list[0]; };
     var CITIES = [['New York', 'New York', 'US', 40.71, -74.01, 10], ['San Francisco', 'California', 'US', 37.77, -122.42, 9], ['Seattle', 'Washington', 'US', 47.61, -122.33, 6], ['Los Angeles', 'California', 'US', 34.05, -118.24, 6], ['Austin', 'Texas', 'US', 30.27, -97.74, 5], ['Chicago', 'Illinois', 'US', 41.88, -87.63, 5], ['Boston', 'Massachusetts', 'US', 42.36, -71.06, 4], ['Denver', 'Colorado', 'US', 39.74, -104.99, 3], ['Miami', 'Florida', 'US', 25.76, -80.19, 2], ['Toronto', 'Ontario', 'CA', 43.65, -79.38, 4], ['Vancouver', 'British Columbia', 'CA', 49.28, -123.12, 2], ['London', 'England', 'GB', 51.51, -0.13, 6], ['Berlin', 'Berlin', 'DE', 52.52, 13.4, 4], ['Amsterdam', 'North Holland', 'NL', 52.37, 4.9, 3], ['Paris', 'Île-de-France', 'FR', 48.86, 2.35, 3], ['Stockholm', 'Stockholm', 'SE', 59.33, 18.07, 2], ['Dublin', 'Leinster', 'IE', 53.35, -6.26, 2], ['Warsaw', 'Masovia', 'PL', 52.23, 21.01, 1], ['Tel Aviv', 'Tel Aviv', 'IL', 32.09, 34.78, 1], ['Bengaluru', 'Karnataka', 'IN', 12.97, 77.59, 4], ['Singapore', 'Singapore', 'SG', 1.35, 103.82, 2], ['Tokyo', 'Tokyo', 'JP', 35.68, 139.69, 2], ['Sydney', 'New South Wales', 'AU', -33.87, 151.21, 3], ['São Paulo', 'São Paulo', 'BR', -23.55, -46.63, 2], ['Mexico City', 'CDMX', 'MX', 19.43, -99.13, 1]];
-    var SOURCES = [['facebook', 'paid', ['xmas-launch', 'retarget-bag'], '', 1.3, 22], ['instagram', 'paid', ['xmas-launch'], '', 1.1, 12], ['tiktok', 'paid', ['ugly-sweater-ugc'], '', .7, 10], ['google', 'paid', ['brand-search', 'shopping'], '', 1.6, 9], ['google', 'organic', [''], 'google.com', 1, 12], ['direct', 'none', [''], '', 1.2, 14], ['x', 'social', [''], 'x.com', .8, 6], ['reddit', 'social', [''], 'reddit.com', .9, 5], ['hacker news', 'social', [''], 'news.ycombinator.com', .6, 4], ['github', 'social', [''], 'github.com', 1, 2], ['newsletter', 'email', ['december-drop'], '', 2, 3]];
+    var SOURCES = [['facebook', 'paid', ['launch-week', 'retarget-bag'], '', 1.3, 22], ['instagram', 'paid', ['launch-week'], '', 1.1, 12], ['tiktok', 'paid', ['dev-humor-ugc'], '', .7, 10], ['google', 'paid', ['brand-search', 'shopping'], '', 1.6, 9], ['google', 'organic', [''], 'google.com', 1, 12], ['direct', 'none', [''], '', 1.2, 14], ['x', 'social', [''], 'x.com', .8, 6], ['reddit', 'social', [''], 'reddit.com', .9, 5], ['hacker news', 'social', [''], 'news.ycombinator.com', .6, 4], ['github', 'social', [''], 'github.com', 1, 2], ['newsletter', 'email', ['new-drop'], '', 2, 3]];
     var DEV = [['mobile', 64], ['desktop', 31], ['tablet', 5]];
     var P = (S.products || []).map(function (p, i) { return [p.id, p.price, 16 - i * .6]; });
     var now = Date.now(), dayMs = 864e5, sessions = [], vids = [];
@@ -565,7 +565,7 @@
       var items = s.paid ? s.items : s.adds.map(function (p) { return { id: p[0], size: 'M', qty: 1, price: p[1] }; });
       return { id: 'o' + s.sid, ts: s.ts + 260000, kind: kind, name: s.name, email: s.email, value: s.paid ? s.value : items.reduce(function (a, x) { return a + x.price; }, 0), currency: 'USD', items: items, country: s.country, city: s.city, source: s.source, medium: s.medium, campaign: s.campaign };
     });
-    var demoSettings = { pixels: { metaPixelId: '1234567890123456', tiktokPixelId: '', ga4Id: 'G-SANTA2026', googleAdsId: '', googleAdsPurchaseLabel: '', gtmId: '', pinterestTagId: '', snapPixelId: '' }, server: { metaCapiToken: '•••• a9F2', metaTestEventCode: '', tiktokEventsToken: '', ga4ApiSecret: '' }, products: { 'santa-hoodie': { badge: 'Bestseller' } } };
+    var demoSettings = { pixels: { metaPixelId: '1234567890123456', tiktokPixelId: '', ga4Id: 'G-SANTA2026', googleAdsId: '', googleAdsPurchaseLabel: '', gtmId: '', pinterestTagId: '', snapPixelId: '' }, server: { metaCapiToken: '•••• a9F2', metaTestEventCode: '', tiktokEventsToken: '', ga4ApiSecret: '' }, products: {} };
     return {
       route: function (path, opts) {
         var u = new URL(path, 'https://x');

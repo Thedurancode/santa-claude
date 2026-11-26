@@ -1,4 +1,4 @@
-/* Santa Claude store server: checkout, analytics and the admin panel's API.
+/* Stack Threads store server: checkout, analytics and the admin panel's API.
 
    POST /                 bag → Stripe Checkout session (returns { url })
    POST /webhook          Stripe "checkout.session.completed" → order saved, and the
@@ -22,7 +22,7 @@
      ADMIN_PASSWORD          password for the admin panel
      MCP_TOKEN               key for AI agents using /mcp (long and random)
      STRIPE_SECRET_KEY       sk_test_… or sk_live_…
-     SITE_URL                https://thedurancode.github.io/santa-claude/
+     SITE_URL                https://thedurancode.github.io/santa-claude/ (the shop's address)
      STRIPE_WEBHOOK_SECRET   whsec_… from the Stripe webhook you create
    Pixel IDs and conversion tokens are entered in the admin panel. The old
    variables (META_PIXEL_ID, META_CAPI_TOKEN, META_TEST_EVENT_CODE,
@@ -42,85 +42,65 @@ const CATALOG = {
     "2XL"
   ],
   "products": {
-    "santa-hoodie": {
-      "name": "Santa Claude hoodie",
-      "price": 68.0,
-      "photo": "assets/p/santa-hoodie.jpg"
+    "works-on-my-machine": {
+      "name": "It Works On My Machine hoodie",
+      "price": 64.0,
+      "photo": "assets/p/works-on-my-machine.png"
     },
-    "compact-hoodie": {
-      "name": "Claude /compact hoodie",
-      "price": 68.0,
-      "photo": "assets/p/compact-hoodie.jpg"
+    "localhost": {
+      "name": "No Place Like 127.0.0.1 hoodie",
+      "price": 64.0,
+      "photo": "assets/p/localhost.png"
     },
-    "wishlist-hoodie": {
-      "name": "Claude Wrote My Wishlist hoodie",
-      "price": 68.0,
-      "photo": "assets/p/wishlist-hoodie.jpg"
+    "not-a-bug": {
+      "name": "Not A Bug hoodie",
+      "price": 64.0,
+      "photo": "assets/p/not-a-bug.png"
     },
-    "snow-hoodie": {
-      "name": "let it snow hoodie",
-      "price": 68.0,
-      "photo": "assets/p/snow-hoodie.jpg"
+    "touch-grass": {
+      "name": "TODO: Touch Grass hoodie",
+      "price": 64.0,
+      "photo": "assets/p/touch-grass.png"
     },
-    "prompt-actually": {
-      "name": "Prompt Actually hoodie",
-      "price": 68.0,
-      "photo": "assets/p/prompt-actually.jpg"
+    "merge-conflicts": {
+      "name": "Merge Conflicts Build Character hoodie",
+      "price": 64.0,
+      "photo": "assets/p/merge-conflicts.png"
     },
-    "ship-friday": {
-      "name": "Ship It on Friday hoodie",
-      "price": 68.0,
-      "photo": "assets/p/ship-friday.jpg"
+    "deploy-friday": {
+      "name": "I Deploy On Fridays hoodie",
+      "price": 64.0,
+      "photo": "assets/p/deploy-friday.png"
     },
-    "silent-night": {
-      "name": "Silent Night, Loud Bugs hoodie",
-      "price": 68.0,
-      "photo": "assets/p/silent-night.jpg"
+    "exit-zero": {
+      "name": "Exit 0 hoodie",
+      "price": 64.0,
+      "photo": "assets/p/exit-zero.png"
     },
-    "vibe-xmas": {
-      "name": "Vibe Coding Till Xmas hoodie",
-      "price": 68.0,
-      "photo": "assets/p/vibe-xmas.jpg"
+    "while-alive": {
+      "name": "while (alive) hoodie",
+      "price": 64.0,
+      "photo": "assets/p/while-alive.png"
     },
-    "one-more-prompt": {
-      "name": "Just One More Prompt hoodie",
-      "price": 68.0,
-      "photo": "assets/p/one-more-prompt.jpg"
+    "hello-world": {
+      "name": "Hello, World. tee",
+      "price": 32.0,
+      "photo": "assets/p/hello-world.png"
     },
-    "context-full": {
-      "name": "Context Window Full hoodie",
-      "price": 68.0,
-      "photo": "assets/p/context-full.jpg"
+    "sleep-not-found": {
+      "name": "404 Sleep Not Found tee",
+      "price": 32.0,
+      "photo": "assets/p/sleep-not-found.png"
     },
-    "agent-workshop": {
-      "name": "Agent Workshop hoodie",
-      "price": 68.0,
-      "photo": "assets/p/agent-workshop.jpg"
+    "code-coffee-repeat": {
+      "name": "Code. Coffee. Repeat. tee",
+      "price": 32.0,
+      "photo": "assets/p/code-coffee-repeat.png"
     },
-    "green-build": {
-      "name": "All I Want Is One Green Build hoodie",
-      "price": 68.0,
-      "photo": "assets/p/green-build.jpg"
-    },
-    "santa-knit": {
-      "name": "Santa Claude knit sweater",
-      "price": 84.0,
-      "photo": "assets/p/santa-knit.jpg"
-    },
-    "compact-knit": {
-      "name": "Claude /compact knit sweater",
-      "price": 84.0,
-      "photo": "assets/p/compact-knit.jpg"
-    },
-    "wishlist-knit": {
-      "name": "Claude Wrote My Wishlist knit sweater",
-      "price": 84.0,
-      "photo": "assets/p/wishlist-knit.jpg"
-    },
-    "snow-knit": {
-      "name": "let it snow knit sweater",
-      "price": 84.0,
-      "photo": "assets/p/snow-knit.jpg"
+    "dark-mode": {
+      "name": "Dark Mode Only tee",
+      "price": 32.0,
+      "photo": "assets/p/dark-mode.png"
     }
   },
   "bundle": {
@@ -169,7 +149,7 @@ export default {
         return json({ error: 'Not found' }, 404, h);
       }
       if (path === '/') {
-        if (req.method !== 'POST') return json({ ok: true, service: 'Santa Claude store server' }, 200, h);
+        if (req.method !== 'POST') return json({ ok: true, service: 'Stack Threads store server' }, 200, h);
         if (!allowed) return json({ error: 'Not allowed' }, 403, h);
         return await createSession(req, env, h);
       }
@@ -507,7 +487,7 @@ async function mcp(req, env) {
   if (!env.MCP_TOKEN) return json({ error: 'Set the MCP_TOKEN secret on the server to switch on agent access' }, 503, H);
   const given = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '') || new URL(req.url).searchParams.get('key') || '';
   const [g, w] = await Promise.all([hmac('mcp', given), hmac('mcp', env.MCP_TOKEN)]);
-  if (!given || g !== w) return json({ error: 'Missing or wrong MCP token' }, 401, Object.assign({ 'WWW-Authenticate': 'Bearer realm="santa-claude"' }, H));
+  if (!given || g !== w) return json({ error: 'Missing or wrong MCP token' }, 401, Object.assign({ 'WWW-Authenticate': 'Bearer realm="stack-threads"' }, H));
   if (req.method === 'DELETE') return new Response(null, { status: 204, headers: H });
   if (req.method !== 'POST') return new Response('This MCP server answers POST requests only', { status: 405, headers: Object.assign({ Allow: 'POST' }, H) });
   let body; try { body = await req.json(); } catch (e) { return json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400, H); }
@@ -521,8 +501,8 @@ async function mcp(req, env) {
       case 'initialize': return ok({
         protocolVersion: MCP_VERSIONS.includes(p.protocolVersion) ? p.protocolVersion : MCP_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'santa-claude-store', title: 'Santa Claude store', version: '1.0.0' },
-        instructions: 'Santa Claude is a holiday hoodie and knit sweater shop for developers. Use get_overview for sales and traffic, get_live for who is on the site now, list_orders for orders and abandoned checkouts, list_products / update_product to change prices, badges and visibility, and get_tracking_settings / update_tracking_settings for ad pixels. Changes go live on the shop within about a minute. Money is USD.'
+        serverInfo: { name: 'stack-threads-store', title: 'Stack Threads store', version: '1.1.0' },
+        instructions: 'Stack Threads sells hoodies and tees printed with developer quotes. Use get_overview for sales and traffic, get_live for who is on the site now, list_orders for orders and abandoned checkouts, list_products / update_product to change prices, badges and visibility, and get_tracking_settings / update_tracking_settings for ad pixels. Changes go live on the shop within about a minute. Money is USD.'
       });
       case 'ping': return ok({});
       case 'tools/list': return ok({ tools: MCP_TOOLS() });

@@ -10,8 +10,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 cfg = open(os.path.join(ROOT, 'js/shop-config.js'), encoding='utf-8').read()
 
 products = {}
-for m in re.finditer(r"\{\s*id:\s*'([^']+)',\s*name:\s*'((?:[^'\\]|\\.)*)'.*?price:\s*([\d.]+).*?photos:\s*\['([^']+)'", cfg, re.S):
-    products[m.group(1)] = {'name': m.group(2).replace("\\'", "'"), 'price': float(m.group(3)), 'photo': m.group(4)}
+for m in re.finditer(r"\{\s*id:\s*'([^']+)',\s*name:\s*'((?:[^'\\]|\\.)*)'(.*?)variants:", cfg, re.S):
+    rest = m.group(3)
+    pic = re.search(r"image:\s*'([^']+)'", rest) or re.search(r"photos:\s*\['([^']+)'", rest)
+    products[m.group(1)] = {'name': m.group(2).replace("\\'", "'"), 'price': float(re.search(r"price:\s*([\d.]+)", rest).group(1)), 'photo': pic.group(1) if pic else 'assets/og.png'}
 sizes = re.findall(r"'([^']+)'", re.search(r"sizes:\s*\[([^\]]*)\]", cfg).group(1))
 bundle = re.search(r"bundle:\s*\{\s*qty:\s*(\d+),\s*percentOff:\s*([\d.]+)", cfg)
 free = re.search(r"freeShippingOver:\s*([\d.]+)", cfg)

@@ -1,6 +1,6 @@
-# Santa Claude
+# Stack Threads
 
-Holiday hoodies and knit sweaters for developers. A stand-alone shop with its own repo,
+Hoodies and tees printed with developer quotes. A stand-alone shop with its own repo,
 hosting, server and admin panel.
 
 | Part | Where |
@@ -12,7 +12,7 @@ hosting, server and admin panel.
 
 ## Files
 
-- `js/shop-config.js`: designs, default prices, bundle discount, shipping, size chart, and
+- `js/shop-config.js`: designs (colours and the quote lines printed front and back), default prices, bundle discount, shipping, size chart, and
   the store server URL (`api` and `checkout.stripeEndpoint`).
 - `js/pixels.js`: ad pixels (Meta, TikTok, GA4, Google Ads, GTM, Pinterest, Snap) and the
   visit tracking that feeds the admin panel. Pixel IDs come from the admin panel.
@@ -20,6 +20,9 @@ hosting, server and admin panel.
 - `admin/`: the admin panel.
 - `checkout-worker/`: the store server. Setup, secrets and the MCP tools are in its README.
 - `tools/build_worker.py`: copies products and prices from `shop-config.js` into the server.
+- `assets/p/*.png`: a picture of each design, used by Stripe checkout, search results and link
+  previews. The shop itself draws the designs live, so after adding a design, render a new
+  picture of it (or the server falls back to `assets/og.png`).
 
 ## Run it locally
 

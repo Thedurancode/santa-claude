@@ -1,4 +1,4 @@
-/* Santa Claude store server: checkout, analytics and the admin panel's API.
+/* Stack Threads store server: checkout, analytics and the admin panel's API.
 
    POST /                 bag → Stripe Checkout session (returns { url })
    POST /webhook          Stripe "checkout.session.completed" → order saved, and the
@@ -22,7 +22,7 @@
      ADMIN_PASSWORD          password for the admin panel
      MCP_TOKEN               key for AI agents using /mcp (long and random)
      STRIPE_SECRET_KEY       sk_test_… or sk_live_…
-     SITE_URL                https://thedurancode.github.io/santa-claude/
+     SITE_URL                https://thedurancode.github.io/santa-claude/ (the shop's address)
      STRIPE_WEBHOOK_SECRET   whsec_… from the Stripe webhook you create
    Pixel IDs and conversion tokens are entered in the admin panel. The old
    variables (META_PIXEL_ID, META_CAPI_TOKEN, META_TEST_EVENT_CODE,
@@ -72,7 +72,7 @@ export default {
         return json({ error: 'Not found' }, 404, h);
       }
       if (path === '/') {
-        if (req.method !== 'POST') return json({ ok: true, service: 'Santa Claude store server' }, 200, h);
+        if (req.method !== 'POST') return json({ ok: true, service: 'Stack Threads store server' }, 200, h);
         if (!allowed) return json({ error: 'Not allowed' }, 403, h);
         return await createSession(req, env, h);
       }
@@ -410,7 +410,7 @@ async function mcp(req, env) {
   if (!env.MCP_TOKEN) return json({ error: 'Set the MCP_TOKEN secret on the server to switch on agent access' }, 503, H);
   const given = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '') || new URL(req.url).searchParams.get('key') || '';
   const [g, w] = await Promise.all([hmac('mcp', given), hmac('mcp', env.MCP_TOKEN)]);
-  if (!given || g !== w) return json({ error: 'Missing or wrong MCP token' }, 401, Object.assign({ 'WWW-Authenticate': 'Bearer realm="santa-claude"' }, H));
+  if (!given || g !== w) return json({ error: 'Missing or wrong MCP token' }, 401, Object.assign({ 'WWW-Authenticate': 'Bearer realm="stack-threads"' }, H));
   if (req.method === 'DELETE') return new Response(null, { status: 204, headers: H });
   if (req.method !== 'POST') return new Response('This MCP server answers POST requests only', { status: 405, headers: Object.assign({ Allow: 'POST' }, H) });
   let body; try { body = await req.json(); } catch (e) { return json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400, H); }
@@ -424,8 +424,8 @@ async function mcp(req, env) {
       case 'initialize': return ok({
         protocolVersion: MCP_VERSIONS.includes(p.protocolVersion) ? p.protocolVersion : MCP_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'santa-claude-store', title: 'Santa Claude store', version: '1.0.0' },
-        instructions: 'Santa Claude is a holiday hoodie and knit sweater shop for developers. Use get_overview for sales and traffic, get_live for who is on the site now, list_orders for orders and abandoned checkouts, list_products / update_product to change prices, badges and visibility, and get_tracking_settings / update_tracking_settings for ad pixels. Changes go live on the shop within about a minute. Money is USD.'
+        serverInfo: { name: 'stack-threads-store', title: 'Stack Threads store', version: '1.1.0' },
+        instructions: 'Stack Threads sells hoodies and tees printed with developer quotes. Use get_overview for sales and traffic, get_live for who is on the site now, list_orders for orders and abandoned checkouts, list_products / update_product to change prices, badges and visibility, and get_tracking_settings / update_tracking_settings for ad pixels. Changes go live on the shop within about a minute. Money is USD.'
       });
       case 'ping': return ok({});
       case 'tools/list': return ok({ tools: MCP_TOOLS() });

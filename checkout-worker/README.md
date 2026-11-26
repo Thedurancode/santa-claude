@@ -18,7 +18,7 @@ You need a free Cloudflare account and Node.js. In a terminal, inside this `chec
 
 ```sh
 npx wrangler login                      # opens Cloudflare in your browser
-npx wrangler d1 create santa-claude     # prints a database_id
+npx wrangler d1 create stack-threads     # prints a database_id
 ```
 
 1. Paste the `database_id` into `wrangler.toml`.
@@ -32,7 +32,7 @@ npx wrangler d1 create santa-claude     # prints a database_id
    ```sh
    npx wrangler deploy
    ```
-   It prints the server URL, for example `https://santa-claude.<you>.workers.dev`.
+   It prints the server URL, for example `https://stack-threads.<you>.workers.dev`.
 4. In `js/shop-config.js`, put that URL in both `api` and `checkout.stripeEndpoint`, then commit and push.
 5. Open `https://thedurancode.github.io/santa-claude/admin/` and sign in with your password.
 6. In Stripe, go to **Settings → Payment methods** and turn on Apple Pay, Google Pay and Link.
@@ -83,12 +83,12 @@ can't set headers. Tools:
 Connect Claude Code:
 
 ```sh
-claude mcp add --transport http santa-claude https://santa-claude.<you>.workers.dev/mcp \
+claude mcp add --transport http stack-threads https://stack-threads.<you>.workers.dev/mcp \
   --header "Authorization: Bearer <MCP_TOKEN>"
 ```
 
-Inside this repo, `.mcp.json` does the same once `SANTA_CLAUDE_API` (the server URL) and
-`SANTA_CLAUDE_MCP_TOKEN` are set in your environment. To revoke access, set a new `MCP_TOKEN`.
+Inside this repo, `.mcp.json` does the same once `STACK_THREADS_API` (the server URL) and
+`STACK_THREADS_MCP_TOKEN` are set in your environment. To revoke access, set a new `MCP_TOKEN`.
 
 ## Checking it
 
