@@ -314,48 +314,116 @@
     }
   });
 
-  /* ───────── checkout ───────── */
-  var C = S.checkout, live = function () { return !!C.shopifyDomain && bag.every(function (l) { return byId[l.id].variants && byId[l.id].variants[l.size]; }); };
+  /* ───────── checkout ─────────
+     Step 1, inside the bag: full name and email (remembered for next time).
+     Step 2: Stripe Checkout with the email already filled in, where Apple Pay,
+     Google Pay and Link make paying one tap. Until a Stripe endpoint is set,
+     step 1 sends a "hold my order" request instead. */
+  var C = S.checkout;
+  var utm = function () { try { return JSON.parse(sessionStorage.getItem('shop-utm') || '{}'); } catch (e) { return {}; } };
+  var shopifyLive = function () { return !!C.shopifyDomain && bag.every(function (l) { return byId[l.id].variants && byId[l.id].variants[l.size]; }); };
+  var stripeLive = function () { return !!C.stripeEndpoint; };
+  var me = {}; try { me = JSON.parse(localStorage.getItem('sc-me') || '{}'); } catch (e) {}
+  var hold = $('.hold', drawer), form = $('.hold-form', hold), err = $('.hold-err', form), submitBtn = $('.hold-submit', form);
+  var orderText = function () { return bag.map(function (l) { return l.qty + ' x ' + byId[l.id].name + ' size ' + l.size; }).join('\n'); };
+  var inbox = function (subject, extra) { // fire-and-forget email to the shop inbox
+    if (!C.holdEmail) return Promise.resolve();
+    var data = { _subject: subject, _template: 'table', _captcha: 'false', order: orderText(), total: money(total()) };
+    Object.keys(extra).forEach(function (k) { data[k] = extra[k]; });
+    var u = utm(); Object.keys(u).forEach(function (k) { data[k] = u[k]; });
+    return fetch('https://formsubmit.co/ajax/' + C.holdEmail, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(data) })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  };
+  var showDone = function (title, text) {
+    if (drawer.hidden) openBag();
+    $('.bag-main', drawer).hidden = true; hold.hidden = false; form.hidden = true;
+    $('.done-title', hold).textContent = title; $('.done-text', hold).textContent = text;
+    $('.hold-done', hold).hidden = false;
+  };
   var checkout = function () {
     if (!count()) return;
     track('checkout', items(bag));
-    if (live()) {
+    if (shopifyLive()) {
       var url = 'https://' + C.shopifyDomain.replace(/^https?:\/\//, '').replace(/\/$/, '') + '/cart/' + bag.map(function (l) { return byId[l.id].variants[l.size] + ':' + l.qty; }).join(',');
-      var qs = [];
+      var qs = [], u = utm();
       if (C.discountCode) qs.push('discount=' + encodeURIComponent(C.discountCode));
-      try { var utm = JSON.parse(sessionStorage.getItem('shop-utm') || '{}'); Object.keys(utm).forEach(function (k) { qs.push(k.indexOf('utm_') === 0 ? k + '=' + encodeURIComponent(utm[k]) : 'attributes[' + k + ']=' + encodeURIComponent(utm[k])); }); } catch (e) {}
+      if (me.email) qs.push('checkout[email]=' + encodeURIComponent(me.email));
+      Object.keys(u).forEach(function (k) { qs.push(k.indexOf('utm_') === 0 ? k + '=' + encodeURIComponent(u[k]) : 'attributes[' + k + ']=' + encodeURIComponent(u[k])); });
       location.href = url + (qs.length ? '?' + qs.join('&') : '');
       return;
     }
-    // Not connected to a store yet: take a hold request instead of payment.
     if (drawer.hidden) openBag();
-    $('.bag-main', drawer).hidden = true;
-    var hold = $('.hold', drawer); hold.hidden = false;
-    $('.hold-form', hold).hidden = false; $('.hold-done', hold).hidden = true;
-    $('.hold-sum', hold).textContent = bag.map(function (l) { return l.qty + ' × ' + byId[l.id].name + ' (' + l.size + ')'; }).join(', ') + '. Total ' + money(total());
-    setTimeout(function () { $('input[name="email"]', hold).focus(); }, 60);
+    var stripe = stripeLive();
+    $('.bag-main', drawer).hidden = true; hold.hidden = false; form.hidden = false; $('.hold-done', hold).hidden = true; err.hidden = true;
+    $('.steps', form).hidden = !stripe;
+    $('.hold-express', form).hidden = !stripe;
+    $('.hold-title', form).textContent = stripe ? 'Your details' : 'Hold your order';
+    $('.hold-intro', form).textContent = stripe ? 'Next you’ll pay securely on Stripe, with your email already filled in.' : 'Online payment opens shortly. Leave your name and email and we’ll hold your sizes, then email you a payment link.';
+    $('.hold-submit-label', form).textContent = stripe ? 'Continue to payment' : 'Hold my order';
+    $('.hold-sum', form).textContent = bag.map(function (l) { return l.qty + ' × ' + byId[l.id].name + ' (' + l.size + ')'; }).join(', ') + '. Total ' + money(total());
+    if (me.name && !form.name.value) form.name.value = me.name;
+    if (me.email && !form.email.value) form.email.value = me.email;
+    setTimeout(function () { (form.name.value && form.email.value ? submitBtn : form.name.value ? form.email : form.name).focus(); }, 80);
   };
   $('.checkout-btn', drawer).addEventListener('click', checkout);
-  $('.hold-back', drawer).addEventListener('click', function () { $('.hold', drawer).hidden = true; $('.bag-main', drawer).hidden = false; });
-  $('.hold-form', drawer).addEventListener('submit', function (e) {
+  $('.hold-back', drawer).addEventListener('click', function () { hold.hidden = true; $('.bag-main', drawer).hidden = false; });
+  var busy = function (on, label) { submitBtn.disabled = on; $('.hold-submit-label', form).textContent = label; };
+  form.addEventListener('submit', function (e) {
     e.preventDefault();
-    var f = e.target, btn = $('button[type="submit"]', f), err = $('.hold-err', f);
-    if (!f.reportValidity()) return;
-    btn.disabled = true; btn.textContent = 'Sending…'; err.hidden = true;
-    var order = bag.map(function (l) { return l.qty + ' x ' + byId[l.id].name + ' size ' + l.size; }).join('\n');
-    var data = { _subject: 'Santa Claude order hold: ' + count() + ' item(s), ' + money(total()), _template: 'table', _captcha: 'false', name: f.name.value, email: f.email.value, phone: f.phone.value, zip: f.zip.value, order: order, total: money(total()) };
-    try { var utm = JSON.parse(sessionStorage.getItem('shop-utm') || '{}'); Object.keys(utm).forEach(function (k) { data[k] = utm[k]; }); } catch (x) {}
-    fetch('https://formsubmit.co/ajax/' + C.holdEmail, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(data) })
-      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(function () {
-        track('lead', items(bag));
-        $('.hold-done-name', drawer).textContent = f.name.value.split(' ')[0];
-        f.hidden = true; $('.hold-done', drawer).hidden = false;
-        bag = []; save(); drawBag(); f.reset();
+    if (!form.reportValidity()) return;
+    var name = form.name.value.trim().replace(/\s+/g, ' '), email = form.email.value.trim();
+    me = { name: name, email: email };
+    try { localStorage.setItem('sc-me', JSON.stringify(me)); } catch (x) {}
+    if (window.shopIdentify) window.shopIdentify(email, name);
+    track('lead', items(bag));
+    err.hidden = true;
+
+    if (stripeLive()) {
+      busy(true, 'Opening secure checkout…');
+      var redirect = $('.redirect'); redirect.hidden = false;
+      if (C.captureLeads) inbox('Checkout started: ' + name + ', ' + money(total()), { name: name, email: email }).catch(function () {});
+      fetch(C.stripeEndpoint.replace(/\/$/, ''), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, name: name, utm: utm(), items: bag.map(function (l) { return { id: l.id, size: l.size, qty: l.qty }; }) })
       })
-      .catch(function () { err.hidden = false; })
-      .then(function () { btn.disabled = false; btn.textContent = 'Hold my order'; });
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.url) throw new Error(j.error || r.status); return j; }); })
+        .then(function (j) {
+          try { localStorage.setItem('sc-pending', JSON.stringify({ name: name, email: email, value: Math.round(total() * 100) / 100, items: items(bag), id: j.id })); } catch (x) {}
+          location.href = j.url;
+        })
+        .catch(function (x) {
+          redirect.hidden = true; busy(false, 'Continue to payment');
+          err.textContent = 'Checkout didn’t open. ' + (x && x.message && !/^\d+$/.test(x.message) ? x.message + '. ' : '') + 'Please try again.';
+          err.hidden = false;
+        });
+      return;
+    }
+
+    busy(true, 'Sending…');
+    inbox('Santa Claude order hold: ' + count() + ' item(s), ' + money(total()), { name: name, email: email })
+      .then(function () {
+        showDone('Thanks, ' + name.split(' ')[0] + '. Your order is held.', 'We’ll email ' + email + ' a payment link within one business day. Nothing is charged until you pay.');
+        bag = []; save(); drawBag();
+      })
+      .catch(function () { err.textContent = 'That didn’t send. Check your connection and try again.'; err.hidden = false; })
+      .then(function () { busy(false, 'Hold my order'); });
   });
+
+  // Coming back from Stripe
+  (function () {
+    var q = new URLSearchParams(location.search), state = q.get('order');
+    if (!state) return;
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (x) {}
+    if (state === 'success') {
+      var pend = {}; try { pend = JSON.parse(localStorage.getItem('sc-pending') || '{}'); localStorage.removeItem('sc-pending'); } catch (x) {}
+      if (pend.items) track('purchase', pend.items, { value: pend.value, eventId: q.get('session_id') || pend.id });
+      bag = []; save(); drawBag();
+      var first = (pend.name || me.name || '').split(' ')[0];
+      setTimeout(function () { showDone((first ? 'Thanks, ' + first + '! ' : 'Thanks! ') + 'Your order is in.', 'Your receipt is on its way to ' + (pend.email || me.email || 'your inbox') + '. We’ll email tracking as soon as it ships.'); }, 150);
+    } else if (state === 'cancel') {
+      setTimeout(function () { if (count()) { openBag(); } }, 150);
+    }
+  })();
 
   /* ───────── size guide ───────── */
   var guide = $('#size-guide');

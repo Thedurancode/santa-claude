@@ -63,7 +63,7 @@
     var value = items.reduce(function (s, i) { return s + i.price * i.qty; }, 0);
     if (extra && typeof extra.value === 'number') value = extra.value;
     value = Math.round(value * 100) / 100;
-    var eid = type + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    var eid = (extra && extra.eventId) || type + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     var ids = items.map(function (i) { return i.id + (i.variant ? '-' + i.variant : ''); });
     try {
       if (window.fbq) fbq('track', n[0], { content_ids: ids, content_type: 'product', contents: items.map(function (i) { return { id: i.id + (i.variant ? '-' + i.variant : ''), quantity: i.qty, item_price: i.price }; }), value: value, currency: CUR, num_items: items.reduce(function (s, i) { return s + i.qty; }, 0) }, { eventID: eid });
@@ -75,3 +75,17 @@
     dataLayer.push({ event: 'shop_' + type, event_id: eid, ecommerce: { currency: CUR, value: value, items: items } });
   };
 })();
+
+/* Once the shopper gives name and email, pass them to the pixels for better
+   ad matching. Meta and TikTok hash the values in the browser before sending. */
+window.shopIdentify = function (email, name) {
+  try {
+    var C = (window.SHOP && window.SHOP.pixels) || {};
+    var parts = String(name || '').toLowerCase().split(' ');
+    if (window.fbq && C.metaPixelId) fbq('init', C.metaPixelId, { em: String(email).toLowerCase(), fn: parts[0] || '', ln: parts.slice(1).join(' ') });
+    if (window.ttq) ttq.identify({ email: String(email).toLowerCase() });
+    if (window.gtag && C.ga4Id) gtag('set', 'user_data', { email: String(email).toLowerCase() });
+    if (window.pintrk) pintrk('set', { em: String(email).toLowerCase() });
+    (window.dataLayer = window.dataLayer || []).push({ event: 'shop_identify', user_email: String(email).toLowerCase() });
+  } catch (e) {}
+};

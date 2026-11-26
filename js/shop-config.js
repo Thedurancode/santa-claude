@@ -9,16 +9,21 @@
 window.SHOP = {
   brand: 'Santa Claude',
   currency: 'USD',
-  freeShippingOver: 100,               // dollars; 0 hides the progress bar
+  freeShippingOver: 100,
+  shippingFlat: 8,                     // dollars, charged under the free-shipping threshold               // dollars; 0 hides the progress bar
   bundle: { qty: 2, percentOff: 15 },  // 2+ items in the bag = 15% off each (add a matching automatic discount in Shopify)
   shipsIn: 'Ships in 2–3 business days',
   returns: 'Free size exchanges within 30 days',
   holidayCutoff: 'Order by December 15 for US delivery before Christmas',
 
   checkout: {
-    shopifyDomain: '',          // e.g. 'santa-claude.myshopify.com'. Empty = "hold my order" mode.
+    // Stripe: the URL of the checkout worker (see checkout-worker/README.md), e.g.
+    // 'https://santa-claude-checkout.yourname.workers.dev'. Empty = "hold my order" mode.
+    stripeEndpoint: '',
+    shopifyDomain: '',          // alternative to Stripe: e.g. 'santa-claude.myshopify.com'
     discountCode: '',           // optional code added to every checkout link
-    holdEmail: 'emprezarioinc@gmail.com'
+    holdEmail: 'emprezarioinc@gmail.com',
+    captureLeads: true          // email the inbox when someone starts checkout, so abandoned bags can be followed up
   },
 
   pixels: {
