@@ -320,7 +320,7 @@
      Google Pay and Link make paying one tap. Until a Stripe endpoint is set,
      step 1 sends a "hold my order" request instead. */
   var C = S.checkout;
-  var utm = function () { try { return JSON.parse(sessionStorage.getItem('shop-utm') || '{}'); } catch (e) { return {}; } };
+  var utm = function () { return window.shopAttribution ? window.shopAttribution() : {}; };
   var shopifyLive = function () { return !!C.shopifyDomain && bag.every(function (l) { return byId[l.id].variants && byId[l.id].variants[l.size]; }); };
   var stripeLive = function () { return !!C.stripeEndpoint; };
   var me = {}; try { me = JSON.parse(localStorage.getItem('sc-me') || '{}'); } catch (e) {}
@@ -334,12 +334,26 @@
     return fetch('https://formsubmit.co/ajax/' + C.holdEmail, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(data) })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
   };
-  var showDone = function (title, text) {
-    if (drawer.hidden) openBag();
-    $('.bag-main', drawer).hidden = true; hold.hidden = false; form.hidden = true;
-    $('.done-title', hold).textContent = title; $('.done-text', hold).textContent = text;
-    $('.hold-done', hold).hidden = false;
+  var thanks = $('.thanks');
+  var showThanks = function (o) {
+    if (!drawer.hidden) { drawer.classList.remove('open'); document.documentElement.classList.remove('locked'); drawer.hidden = true; }
+    $('.thanks-knit', thanks).style.backgroundImage = knitUrl('#F3F5FA', '#E5323B', 3);
+    $('.thanks-kicker', thanks).innerHTML = o.kicker;
+    $('#thanks-h', thanks).textContent = o.title;
+    $('.thanks-lead', thanks).innerHTML = o.lead;
+    $('.thanks-items', thanks).innerHTML = (o.items || []).map(function (i) {
+      var p = byId[i.id] || {};
+      return '<li>' + (p.photos ? '<img src="' + p.photos[0] + '" alt="">' : '<span></span>') + '<p>' + esc(i.name) + '<span>Size ' + esc(i.variant) + (i.qty > 1 ? ' · Qty ' + i.qty : '') + '</span></p><b>' + money(i.price * i.qty) + '</b></li>';
+    }).join('');
+    $('.thanks-total-label', thanks).textContent = o.totalLabel;
+    $('.thanks-total-value', thanks).textContent = money(o.total || 0);
+    $('.thanks-total', thanks).hidden = !o.items || !o.items.length;
+    $('.thanks-steps', thanks).innerHTML = o.steps.map(function (s, k) { return '<li' + (k === 0 ? ' class="done"' : '') + '><b>' + s[0] + '</b><span>' + s[1] + '</span></li>'; }).join('');
+    thanks.hidden = false; document.documentElement.classList.add('locked');
+    setTimeout(function () { $('#thanks-h', thanks).focus({ preventScroll: true }); }, 50);
   };
+  $('.thanks-close').addEventListener('click', function () { thanks.hidden = true; document.documentElement.classList.remove('locked'); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !thanks.hidden) $('.thanks-close').click(); });
   var checkout = function () {
     if (!count()) return;
     track('checkout', items(bag));
@@ -384,7 +398,7 @@
       if (C.captureLeads) inbox('Checkout started: ' + name + ', ' + money(total()), { name: name, email: email }).catch(function () {});
       fetch(C.stripeEndpoint.replace(/\/$/, ''), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, name: name, utm: utm(), items: bag.map(function (l) { return { id: l.id, size: l.size, qty: l.qty }; }) })
+        body: JSON.stringify({ email: email, name: name, utm: utm(), ids: window.shopClientIds ? window.shopClientIds() : {}, items: bag.map(function (l) { return { id: l.id, size: l.size, qty: l.qty }; }) })
       })
         .then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.url) throw new Error(j.error || r.status); return j; }); })
         .then(function (j) {
@@ -402,8 +416,15 @@
     busy(true, 'Sending…');
     inbox('Santa Claude order hold: ' + count() + ' item(s), ' + money(total()), { name: name, email: email })
       .then(function () {
-        showDone('Thanks, ' + name.split(' ')[0] + '. Your order is held.', 'We’ll email ' + email + ' a payment link within one business day. Nothing is charged until you pay.');
+        var held = items(bag), heldTotal = total();
         bag = []; save(); drawBag();
+        showThanks({
+          kicker: 'Order <b>held</b>',
+          title: 'Thanks, ' + name.split(' ')[0] + '. Your sizes are saved.',
+          lead: 'We’ll email <b>' + esc(email) + '</b> a secure payment link within one business day. Nothing is charged until you pay.',
+          items: held, total: heldTotal, totalLabel: 'Order total',
+          steps: [['Order held', 'Your sizes are set aside'], ['Payment link', 'Sent to your email within one business day'], ['On its way', 'Ships 2–3 business days after payment, with tracking']]
+        });
       })
       .catch(function () { err.textContent = 'That didn’t send. Check your connection and try again.'; err.hidden = false; })
       .then(function () { busy(false, 'Hold my order'); });
@@ -416,10 +437,20 @@
     try { history.replaceState(null, '', location.pathname + location.hash); } catch (x) {}
     if (state === 'success') {
       var pend = {}; try { pend = JSON.parse(localStorage.getItem('sc-pending') || '{}'); localStorage.removeItem('sc-pending'); } catch (x) {}
-      if (pend.items) track('purchase', pend.items, { value: pend.value, eventId: q.get('session_id') || pend.id });
+      var sid = q.get('session_id') || pend.id || '';
+      if (pend.items) track('purchase', pend.items, { value: pend.value, eventId: sid, orderId: sid });
       bag = []; save(); drawBag();
       var first = (pend.name || me.name || '').split(' ')[0];
-      setTimeout(function () { showDone((first ? 'Thanks, ' + first + '! ' : 'Thanks! ') + 'Your order is in.', 'Your receipt is on its way to ' + (pend.email || me.email || 'your inbox') + '. We’ll email tracking as soon as it ships.'); }, 150);
+      var num = sid ? 'SC-' + sid.replace(/^cs_(test|live)_/, '').slice(-8).toUpperCase() : '';
+      setTimeout(function () {
+        showThanks({
+          kicker: num ? 'Order <b>' + num + '</b> confirmed' : 'Order confirmed',
+          title: first ? 'Thanks, ' + first + '! It’s on the way.' : 'Thanks! It’s on the way.',
+          lead: 'A receipt is headed to <b>' + esc(pend.email || me.email || 'your inbox') + '</b>.',
+          items: pend.items, total: pend.value, totalLabel: 'Total paid',
+          steps: [['Payment confirmed', 'Receipt sent to your email'], ['Packing your order', 'Ships in 2–3 business days'], ['On its way', 'Tracking link by email as soon as it ships']]
+        });
+      }, 120);
     } else if (state === 'cancel') {
       setTimeout(function () { if (count()) { openBag(); } }, 150);
     }

@@ -23,10 +23,10 @@
 <meta name="twitter:image" content="https://thedurancode.github.io/santa-claude/assets/og.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400..700&family=JetBrains+Mono:wght@700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/shop.css?v=9">
-<script src="js/shop-config.js?v=9"></script>
-<script src="js/pixels.js?v=9"></script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Silkscreen:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/shop.css?v=11">
+<script src="js/shop-config.js?v=11"></script>
+<script src="js/pixels.js?v=11"></script>
 </head>
 <body>
 
@@ -241,8 +241,24 @@
   </div>
 </dialog>
 
+<div class="thanks" hidden role="dialog" aria-modal="true" aria-labelledby="thanks-h">
+  <div class="thanks-card">
+    <div class="thanks-knit" aria-hidden="true"></div>
+    <div class="thanks-body">
+      <div class="thanks-top"><div class="thanks-check"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><p class="thanks-kicker"></p></div>
+      <h2 id="thanks-h" tabindex="-1"></h2>
+      <p class="thanks-lead"></p>
+      <ul class="thanks-items"></ul>
+      <p class="thanks-total"><span class="thanks-total-label">Total paid</span><b class="thanks-total-value"></b></p>
+      <ol class="thanks-steps"></ol>
+      <div class="thanks-actions"><button class="pill-btn primary thanks-close" type="button">Keep shopping</button></div>
+      <p class="thanks-note">Questions about your order? Just reply to the receipt email.</p>
+    </div>
+  </div>
+</div>
+
 <div class="redirect" hidden><div class="redirect-box"><span class="spinner" aria-hidden="true"></span><p>Opening secure checkout…</p><p class="redirect-sub"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Secured by Stripe</p></div></div>
 
-<script src="js/shop.js?v=9"></script>
+<script src="js/shop.js?v=11"></script>
 </body>
 </html>

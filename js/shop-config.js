@@ -30,6 +30,8 @@ window.SHOP = {
     metaPixelId: '',      // Meta (Facebook / Instagram) Pixel ID
     tiktokPixelId: '',    // TikTok Pixel ID
     ga4Id: '',            // Google Analytics 4, 'G-XXXXXXX'
+    googleAdsId: '',      // Google Ads, 'AW-XXXXXXXXX'
+    googleAdsPurchaseLabel: '', // the label of your Purchase conversion action, e.g. 'AbC-D_efG-h12_34-567'
     gtmId: '',            // Google Tag Manager, 'GTM-XXXXXXX' (optional)
     pinterestTagId: '',   // Pinterest Tag ID (optional)
     snapPixelId: ''       // Snapchat Pixel ID (optional)

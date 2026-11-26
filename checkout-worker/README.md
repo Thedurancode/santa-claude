@@ -17,4 +17,25 @@ session. Prices are read from the catalog inside `worker.js`, never from the bro
 After changing prices or products in `js/shop-config.js`, run `python3 tools/build_worker.py`
 and paste the new `worker.js` into Cloudflare again.
 
-To test, use card 4242 4242 4242 4242 with any future date and any CVC while on the `sk_test_` key.
+## Server-side conversion tracking (recommended)
+
+Browser pixels miss sales when an ad blocker is on or the shopper closes the tab
+after paying. The worker also reports every paid order from the server.
+
+1. In Stripe, go to **Developers → Webhooks → Add endpoint**:
+   - URL: `<your worker URL>/webhook`
+   - Events: `checkout.session.completed` and `checkout.session.async_payment_succeeded`
+   - Copy the signing secret (`whsec_…`) into the worker as `STRIPE_WEBHOOK_SECRET` (Secret).
+2. Add the worker variables for each platform you advertise on:
+   - **Meta:** `META_PIXEL_ID`, and `META_CAPI_TOKEN` (Events Manager → your pixel → Settings → Conversions API → Generate access token)
+   - **TikTok:** `TIKTOK_PIXEL_ID`, and `TIKTOK_EVENTS_TOKEN` (Events Manager → your pixel → Settings → Events API → Generate access token)
+   - **Google Analytics 4:** `GA4_ID`, and `GA4_API_SECRET` (Admin → Data streams → your stream → Measurement Protocol API secrets)
+   - Optional: `META_TEST_EVENT_CODE` to watch server events arrive in Meta's Test Events tab.
+
+The server and browser send the same event ID (the Stripe session ID), so each sale is counted once.
+For Google Ads, fill in `googleAdsId` and `googleAdsPurchaseLabel` in `js/shop-config.js`.
+
+To check the browser side, open the shop with `?debug=tracking` at the end of the URL and watch
+the console, or use Meta Pixel Helper and TikTok Pixel Helper.
+
+To test payments, use card 4242 4242 4242 4242 with any future date and any CVC while on the `sk_test_` key.
