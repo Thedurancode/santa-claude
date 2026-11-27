@@ -223,7 +223,7 @@
       '<div class="rack-floor" aria-hidden="true"></div><div class="rack-spot" aria-hidden="true"></div>' +
       '<div class="rack-rail" aria-hidden="true"><i></i><i></i></div>' +
       items.map(function (p, i) {
-        return '<a class="rack-item" href="#' + p.id + '" data-i="' + i + '" tabindex="-1" draggable="false" aria-label="' + esc(p.name) + '" style="--img:url(&quot;' + new URL(cut(p), location.href).href + '&quot;)">' +
+        return '<a class="rack-item' + (p.type === 'sweater' ? ' knit' : '') + '" href="#' + p.id + '" data-i="' + i + '" tabindex="-1" draggable="false" aria-label="' + esc(p.name) + '" style="--img:url(&quot;' + new URL(cut(p), location.href).href + '&quot;)">' +
           '<span class="rack-swing"><svg class="rack-hook" viewBox="0 0 30 60" aria-hidden="true"><path d="M15 60V24c0-5-11-5-11-13a11 11 0 0 1 22 0" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>' +
           '<span class="rack-garment"><img src="' + cut(p) + '" alt="" draggable="false" decoding="async" loading="' + (i < 5 || i > items.length - 5 ? 'eager' : 'lazy') + '"><span class="rack-shade"></span></span></span></a>';
       }).join('') + '</div>' +
