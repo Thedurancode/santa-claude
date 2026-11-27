@@ -43,7 +43,7 @@ window.SHOP = {
     snapPixelId: ''       // Snapchat Pixel ID (optional)
   },
 
-  sizes: ['S', 'M', 'L', 'XL', '2XL'],
+  sizes: ['M', 'L', 'XL'],
 
   // type: 'hoodie', 'tee' or 'sweater' (knit, with binary bands; `bits` sets the digits) · body: garment colour · ink / ink2: print colours
   // font: 'mono', 'sans' (heavy block letters) or 'pix' (pixel)
@@ -158,8 +158,8 @@ window.SHOP = {
 
   // Chest width and body length in inches, laid flat, per type.
   sizeChart: {
-    hoodie: [['S', 21, 27], ['M', 22.5, 28], ['L', 24, 29], ['XL', 25.5, 30], ['2XL', 27, 31]],
-    sweater: [['S', 20.5, 26.5], ['M', 22, 27.5], ['L', 23.5, 28.5], ['XL', 25, 29.5], ['2XL', 26.5, 30.5]],
-    tee: [['S', 19, 28], ['M', 20.5, 29], ['L', 22, 30], ['XL', 23.5, 31], ['2XL', 25, 32]]
+    hoodie: [['M', 22.5, 28], ['L', 24, 29], ['XL', 25.5, 30]],
+    sweater: [['M', 22, 27.5], ['L', 23.5, 28.5], ['XL', 25, 29.5]],
+    tee: [['M', 20.5, 29], ['L', 22, 30], ['XL', 23.5, 31]]
   }
 };

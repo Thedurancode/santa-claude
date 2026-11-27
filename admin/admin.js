@@ -499,7 +499,7 @@
         if (s.details && rnd() < .66 * Math.min(1.2, boost)) {
           s.paid = true;
           var off = s.adds.length >= 2 ? .85 : 1;
-          s.items = s.adds.map(function (p) { return { id: p[0], size: ['S', 'M', 'L', 'XL', '2XL'][Math.floor(rnd() * 5)], qty: 1, price: Math.round(p[1] * off * 100) / 100 }; });
+          s.items = s.adds.map(function (p) { return { id: p[0], size: ['M', 'L', 'XL'][Math.floor(rnd() * 3)], qty: 1, price: Math.round(p[1] * off * 100) / 100 }; });
           s.value = s.items.reduce(function (a, i) { return a + i.price; }, 0) + (s.items.length >= 2 ? 0 : 8);
         }
         sessions.push(s);

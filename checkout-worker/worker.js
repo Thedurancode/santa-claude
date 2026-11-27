@@ -35,11 +35,9 @@
 const CATALOG = {
   "currency": "usd",
   "sizes": [
-    "S",
     "M",
     "L",
-    "XL",
-    "2XL"
+    "XL"
   ],
   "products": {
     "santa-hoodie": {
