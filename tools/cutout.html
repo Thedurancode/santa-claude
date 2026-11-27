@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Cut-outs</title>
+<style>
+body { margin: 0; padding: 16px; font: 14px system-ui; background: #ddd; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+figure { margin: 0; background: linear-gradient(135deg, #2F5BFF, #15181D); border-radius: 8px; padding: 6px; }
+figure img { width: 100%; display: block; }
+figcaption { color: #fff; font-size: 12px; padding: 4px; }
+</style></head>
+<body>
+<p id="st">working…</p>
+<div class="grid" id="g"></div>
+<script src="../js/shop-config.js"></script>
+<script>
+// Background removal for studio mockups: flood the backdrop in from the image border,
+// stepping only between similar neighbours, then clear enclosed backdrop pockets
+// (between arm and body), feather the edge and save as WebP with alpha.
+var P = new URLSearchParams(location.search);
+var STEP = +(P.get('step') || 7), FAR = +(P.get('far') || 46), POCKET = +(P.get('pocket') || 13);
+var save = P.has('save');
+var ids = SHOP.products.filter(function (p) { return p.photos; }).map(function (p) { return p.id; });
+if (P.get('only')) ids = P.get('only').split(',');
+
+var BASE = { step: STEP, far: FAR, pocket: POCKET, open: +(P.get('open') || 4) };
+var OV = JSON.parse(P.get('ov') || '{}');
+var OPEN, EDGE = 0, SYM = 0, CLEAR;
+function cut(img, id) {
+  var cfg = Object.assign({}, BASE, OV[id] || {});
+  STEP = cfg.step; FAR = cfg.far; POCKET = cfg.pocket; OPEN = cfg.open; EDGE = cfg.edge || 0; SYM = cfg.sym || 0; CLEAR = cfg.clear;
+  var W = img.naturalWidth, H = img.naturalHeight, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  var x = c.getContext('2d'); x.drawImage(img, 0, 0);
+  var d = x.getImageData(0, 0, W, H), px = d.data, N = W * H;
+  // 3x3 box blur to quiet JPEG noise for the comparisons
+  var r = new Float32Array(N), g = new Float32Array(N), b = new Float32Array(N);
+  for (var yy = 0; yy < H; yy++) for (var xx = 0; xx < W; xx++) {
+    var sr = 0, sg = 0, sb = 0, n = 0;
+    for (var j = -1; j <= 1; j++) for (var i = -1; i <= 1; i++) {
+      var X = xx + i, Y = yy + j; if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+      var k = (Y * W + X) * 4; sr += px[k]; sg += px[k + 1]; sb += px[k + 2]; n++;
+    }
+    var q = yy * W + xx; r[q] = sr / n; g[q] = sg / n; b[q] = sb / n;
+  }
+  var dist = function (p, R, G, B) { return Math.abs(r[p] - R) + Math.abs(g[p] - G) + Math.abs(b[p] - B); };
+  // backdrop reference: median of the top row and the top of the side edges
+  var samp = [];
+  for (var i2 = 0; i2 < W; i2 += 4) samp.push(i2);
+  for (var j2 = 0; j2 < H * .5; j2 += 4) { samp.push(j2 * W); samp.push(j2 * W + W - 1); }
+  var med = function (arr) { arr.sort(function (a, b) { return a - b; }); return arr[arr.length >> 1]; };
+  var BR = med(samp.map(function (p) { return r[p]; })), BG = med(samp.map(function (p) { return g[p]; })), BB = med(samp.map(function (p) { return b[p]; }));
+  var bg = new Uint8Array(N), stack = [];
+  var seed = function (p) { if (!bg[p] && dist(p, BR, BG, BB) < FAR) { bg[p] = 1; stack.push(p); } };
+  for (var a = 0; a < W; a++) { seed(a); seed((H - 1) * W + a); }
+  for (var e = 0; e < H; e++) { seed(e * W); seed(e * W + W - 1); }
+  while (stack.length) {
+    var p = stack.pop(), px0 = p % W, py0 = (p / W) | 0;
+    var nb = [px0 > 0 ? p - 1 : -1, px0 < W - 1 ? p + 1 : -1, py0 > 0 ? p - W : -1, py0 < H - 1 ? p + W : -1];
+    for (var t = 0; t < 4; t++) {
+      var q2 = nb[t]; if (q2 < 0 || bg[q2]) continue;
+      var qx = q2 % W, qy = (q2 / W) | 0, nearEdge = EDGE && (qx < EDGE || qx >= W - EDGE || qy >= H - EDGE);
+      if (dist(q2, r[p], g[p], b[p]) < STEP * (nearEdge ? 3 : 1) && dist(q2, BR, BG, BB) < FAR * (nearEdge ? 1.5 : 1)) { bg[q2] = 1; stack.push(q2); }
+    }
+  }
+  // enclosed pockets of backdrop (gap between sleeve and body)
+  var seen = new Uint8Array(N);
+  for (var s = 0; s < N; s++) {
+    if (bg[s] || seen[s] || dist(s, BR, BG, BB) >= POCKET) continue;
+    var comp = [s], st = [s]; seen[s] = 1;
+    while (st.length) {
+      var u = st.pop(), ux = u % W, uy = (u / W) | 0;
+      [ux > 0 ? u - 1 : -1, ux < W - 1 ? u + 1 : -1, uy > 0 ? u - W : -1, uy < H - 1 ? u + W : -1].forEach(function (v) {
+        if (v < 0 || seen[v] || bg[v] || dist(v, BR, BG, BB) >= POCKET) return;
+        seen[v] = 1; st.push(v); comp.push(v);
+      });
+    }
+    if (comp.length > N * .002) comp.forEach(function (v) { bg[v] = 1; });
+  }
+  // opening (erode then dilate) wipes thin shadow slivers, then keep only the biggest piece
+  var morph = function (src, R, grow) { // grow=false: erode garment
+    var tmp = new Uint8Array(N), out = new Uint8Array(N), X, Y, k2, v;
+    for (Y = 0; Y < H; Y++) for (X = 0; X < W; X++) {
+      v = grow ? 0 : 1;
+      for (k2 = -R; k2 <= R; k2++) { var xx2 = X + k2; if (xx2 < 0 || xx2 >= W) { if (!grow) v = 0; continue; } var f = src[Y * W + xx2]; if (grow ? f : !f) { v = grow ? 1 : 0; break; } }
+      tmp[Y * W + X] = v;
+    }
+    for (Y = 0; Y < H; Y++) for (X = 0; X < W; X++) {
+      v = grow ? 0 : 1;
+      for (k2 = -R; k2 <= R; k2++) { var yy2 = Y + k2; if (yy2 < 0 || yy2 >= H) { if (!grow) v = 0; continue; } var f2 = tmp[yy2 * W + X]; if (grow ? f2 : !f2) { v = grow ? 1 : 0; break; } }
+      out[Y * W + X] = v;
+    }
+    return out;
+  };
+  var fg = new Uint8Array(N);
+  for (var f0 = 0; f0 < N; f0++) fg[f0] = bg[f0] ? 0 : 1;
+  (CLEAR || []).forEach(function (rc) { for (var cy = rc[1]; cy < Math.min(H, rc[3]); cy++) for (var cx = rc[0]; cx < Math.min(W, rc[2]); cx++) fg[cy * W + cx] = 0; });
+  if (OPEN) fg = morph(morph(fg, OPEN, false), OPEN, true);
+  if (SYM) { // garment is symmetric: keep only what the mirror image agrees on (axis = hood centre)
+    var hx0 = W, hx1 = 0;
+    for (var hy = Math.round(H * .04); hy < H * .1; hy++) for (var hx = 0; hx < W; hx++) if (fg[hy * W + hx]) { if (hx < hx0) hx0 = hx; if (hx > hx1) hx1 = hx; }
+    var axis = hx0 + hx1, sfg = new Uint8Array(N);
+    for (var sy = 0; sy < H; sy++) for (var sx = 0; sx < W; sx++) {
+      var mx2 = axis - sx, mirror = mx2 >= 0 && mx2 < W && fg[sy * W + mx2];
+      // sym 1: keep where both sides agree; sym 2: the left half copies the right half's outline
+      sfg[sy * W + sx] = SYM === 2 ? (2 * sx < axis ? (mirror ? 1 : 0) : fg[sy * W + sx]) : (fg[sy * W + sx] && mirror ? 1 : 0);
+    }
+    fg = sfg;
+  }
+  var lab = new Int32Array(N), best = 0, bestN = 0, nl = 0;
+  for (var l0 = 0; l0 < N; l0++) {
+    if (!fg[l0] || lab[l0]) continue;
+    nl++; var cnt0 = 0, st0 = [l0]; lab[l0] = nl;
+    while (st0.length) {
+      var u0 = st0.pop(), ux0 = u0 % W, uy0 = (u0 / W) | 0; cnt0++;
+      [ux0 > 0 ? u0 - 1 : -1, ux0 < W - 1 ? u0 + 1 : -1, uy0 > 0 ? u0 - W : -1, uy0 < H - 1 ? u0 + W : -1].forEach(function (v) { if (v >= 0 && fg[v] && !lab[v]) { lab[v] = nl; st0.push(v); } });
+    }
+    if (cnt0 > bestN) { bestN = cnt0; best = nl; }
+  }
+  for (var l1 = 0; l1 < N; l1++) bg[l1] = lab[l1] === best ? 0 : 1;
+  // alpha: garment = 255; grow backdrop by 1px to drop the halo, then feather
+  var al = new Float32Array(N);
+  for (var z = 0; z < N; z++) {
+    var zx = z % W, zy = (z / W) | 0, near = bg[z];
+    if (!near) near = (zx > 0 && bg[z - 1]) || (zx < W - 1 && bg[z + 1]) || (zy > 0 && bg[z - W]) || (zy < H - 1 && bg[z + W]);
+    al[z] = near ? 0 : 1;
+  }
+  for (var w = 0; w < N; w++) {
+    var wx = w % W, wy = (w / W) | 0, sum = 0, cnt = 0;
+    for (var j3 = -1; j3 <= 1; j3++) for (var i3 = -1; i3 <= 1; i3++) {
+      var X3 = wx + i3, Y3 = wy + j3; if (X3 < 0 || Y3 < 0 || X3 >= W || Y3 >= H) continue; sum += al[Y3 * W + X3]; cnt++;
+    }
+    px[w * 4 + 3] = Math.round(255 * sum / cnt);
+  }
+  x.putImageData(d, 0, 0);
+  // crop to the garment
+  var x0 = W, y0 = H, x1 = 0, y1 = 0;
+  for (var m = 0; m < N; m++) if (px[m * 4 + 3] > 8) { var mx = m % W, my = (m / W) | 0; if (mx < x0) x0 = mx; if (mx > x1) x1 = mx; if (my < y0) y0 = my; if (my > y1) y1 = my; }
+  var o = document.createElement('canvas'); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+  o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+  return o;
+}
+
+var done = 0, jobs = [];
+if (P.get('try')) { // one design, several settings: try=[{...},{...}]&only=id
+  JSON.parse(P.get('try')).forEach(function (t) { jobs.push({ id: ids[0], ov: t, tag: JSON.stringify(t) }); });
+  save = false;
+} else ids.forEach(function (id) { jobs.push({ id: id }); });
+ids = jobs;
+jobs.forEach(function (job) {
+  var id = job.id, img = new Image();
+  img.onload = function () {
+    if (job.ov) OV[id] = job.ov;
+    var o = cut(img, id);
+    if (job.tag) id = id + ' ' + job.tag;
+    o.toBlob(function (blob) {
+      var f = document.createElement('figure');
+      f.innerHTML = '<img src="' + URL.createObjectURL(blob) + '"><figcaption>' + id + ' ' + o.width + 'x' + o.height + ' ' + Math.round(blob.size / 1024) + 'KB</figcaption>';
+      document.getElementById('g').appendChild(f);
+      var fin = function () { if (++done === ids.length) document.getElementById('st').textContent = 'done ' + done + (save ? ' (saved)' : ''); };
+      if (save) fetch('/save/' + id + '.webp', { method: 'PUT', body: blob }).then(fin); else fin();
+    }, 'image/webp', .86);
+  };
+  img.src = '../assets/p/' + id + '.jpg';
+});
+</script>
+</body></html>

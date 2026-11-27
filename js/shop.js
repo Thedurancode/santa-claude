@@ -211,18 +211,21 @@
   // the quote ticker: every product's quote, twice over so the loop is seamless
   var tick = S.products.filter(function (p) { return p.front; }).map(function (p) { return '<span>' + esc((p.back || p.front).map(function (l) { return l.replace(/^\^/, '').trim(); }).join(' ')) + '</span>'; }).join('');
   $$('.ticker-run').forEach(function (t) { t.innerHTML = tick + tick; });
-  // home: a 3D clothes rack of the original designs. Flip through like a real rail:
-  // the one in front faces you, the rest hang turned on the rail behind it.
+  // home: a 3D clothes rack. The original designs hang as cut-out garments on hooks
+  // from a chrome rail; the one in front faces you, the rest hang turned on the rail.
   (function () {
     var items = S.products.filter(function (p) { return p.photos; });
-    if (!items.length) items = S.products.slice(0, 8);
-    var box = $('.hero-pics'), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    box.innerHTML = '<div class="rack" tabindex="0" role="group" aria-roledescription="carousel" aria-label="Christmas designs on the rack. Use the arrow keys to flip through.">' +
-      '<div class="rack-rail" aria-hidden="true"><i></i><i></i></div><div class="rack-floor" aria-hidden="true"></div>' +
+    var box = $('.hero-pics');
+    if (!items.length) { box.hidden = true; return; }
+    var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var cut = function (p) { return 'assets/p/cut/' + p.id + '.webp'; };
+    box.innerHTML = '<div class="rack" tabindex="0" role="group" aria-roledescription="carousel" aria-label="Designs on the rack. Use the arrow keys to flip through.">' +
+      '<div class="rack-floor" aria-hidden="true"></div><div class="rack-spot" aria-hidden="true"></div>' +
+      '<div class="rack-rail" aria-hidden="true"><i></i><i></i></div>' +
       items.map(function (p, i) {
-        return '<a class="rack-item" href="#' + p.id + '" data-i="' + i + '" tabindex="-1" draggable="false" aria-label="' + esc(p.name) + '"><span class="rack-swing">' +
-          '<svg class="rack-hook" viewBox="0 0 40 64" aria-hidden="true"><path d="M20 62V30c0-6 -14-6 -14-16a14 14 0 0 1 28 0" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>' +
-          '<span class="rack-card">' + picture(p, 'front').replace('loading="lazy"', 'loading="' + (i < 4 || i > items.length - 4 ? 'eager' : 'lazy') + '"') + '</span></span></a>';
+        return '<a class="rack-item" href="#' + p.id + '" data-i="' + i + '" tabindex="-1" draggable="false" aria-label="' + esc(p.name) + '" style="--img:url(&quot;' + new URL(cut(p), location.href).href + '&quot;)">' +
+          '<span class="rack-swing"><svg class="rack-hook" viewBox="0 0 30 60" aria-hidden="true"><path d="M15 60V24c0-5-11-5-11-13a11 11 0 0 1 22 0" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>' +
+          '<span class="rack-garment"><img src="' + cut(p) + '" alt="" draggable="false" decoding="async" loading="' + (i < 5 || i > items.length - 5 ? 'eager' : 'lazy') + '"><span class="rack-shade"></span></span></span></a>';
       }).join('') + '</div>' +
       '<div class="rack-ui"><button class="rack-arrow" type="button" data-d="-1" aria-label="Previous design">‹</button>' +
       '<a class="rack-label" href="#"><b></b><span></span></a>' +
@@ -234,15 +237,18 @@
       els.forEach(function (el, i) {
         var o = i - at;
         if (o > items.length / 2) o -= items.length;
-        if (o < -items.length / 2) o += items.length; // wrap around the rail
+        if (o < -items.length / 2) o += items.length; // the rail wraps round
         var d = Math.abs(o), sg = o < 0 ? -1 : 1;
-        var x = d === 0 ? 0 : sg * (w * .62 + (d - 1) * w * .2);
-        el.style.transform = 'translateX(' + x.toFixed(1) + 'px) translateZ(' + (d ? -w * .55 - d * 8 : 0).toFixed(1) + 'px) rotateY(' + (d ? -sg * 64 : 0) + 'deg)';
+        var x = d === 0 ? 0 : sg * (w * .5 + (d - 1) * w * .13);
+        var z = d === 0 ? 40 : -w * .25 - d * 14;
+        el.style.transform = 'translate3d(' + x.toFixed(1) + 'px,0,' + z.toFixed(1) + 'px) rotateY(' + (d ? -sg * 72 : 0) + 'deg)';
         el.style.zIndex = 50 - d;
-        el.style.opacity = d > 5 ? 0 : 1;
+        el.style.opacity = d > 6 ? 0 : 1;
+        el.style.setProperty('--shade', d ? Math.min(.62, .3 + d * .05) : 0);
+        el.style.setProperty('--side', sg < 0 ? '90deg' : '270deg');
         el.classList.toggle('on', d === 0);
-        el.style.setProperty('--dim', d ? Math.max(.55, .86 - d * .05) : 1);
-        if (swing && !still && d < 4) { el.classList.remove('sway'); void el.offsetWidth; el.classList.add('sway'); }
+        el.classList.toggle('far', d > 3);
+        if (swing && !still && d < 5) { el.classList.remove('sway'); void el.offsetWidth; el.classList.add('sway'); }
       });
       var p = items[at];
       label.href = '#' + p.id;
@@ -251,7 +257,7 @@
     };
     var stop = function () { clearInterval(timer); timer = 0; };
     var go = function (d) { stop(); show(at + d, true); };
-    if (!still) timer = setInterval(function () { if (!document.hidden && !$('#home').hidden) show(at + 1, true); }, 3800);
+    if (!still) timer = setInterval(function () { if (!document.hidden && !$('#home').hidden) show(at + 1, true); }, 4200);
     els.forEach(function (el) { el.addEventListener('click', function (e) { var i = +el.dataset.i; if (i !== at) { e.preventDefault(); stop(); show(i, true); } }); });
     $$('.rack-arrow', box).forEach(function (b) { b.addEventListener('click', function () { go(+b.dataset.d); }); });
     rack.addEventListener('keydown', function (e) {
@@ -264,7 +270,7 @@
     rack.addEventListener('pointerdown', function (e) { x0 = e.clientX; moved = false; });
     rack.addEventListener('pointermove', function (e) {
       if (x0 === null) return;
-      var dx = e.clientX - x0, step = Math.max(50, (els[0].offsetWidth || 240) * .3);
+      var dx = e.clientX - x0, step = Math.max(40, (els[0].offsetWidth || 240) * .22);
       if (Math.abs(dx) > step) { moved = true; go(dx < 0 ? 1 : -1); x0 = e.clientX; }
     });
     addEventListener('pointerup', function () { x0 = null; });
