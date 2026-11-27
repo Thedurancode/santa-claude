@@ -212,9 +212,9 @@
   var tick = S.products.filter(function (p) { return p.front; }).map(function (p) { return '<span>' + esc((p.back || p.front).map(function (l) { return l.replace(/^\^/, '').trim(); }).join(' ')) + '</span>'; }).join('');
   $$('.ticker-run').forEach(function (t) { t.innerHTML = tick + tick; });
   // home: four designs, mixing fronts and backs, hoodies and tees
-  var heroPicks = ['works-on-my-machine', 'hello-world', 'merge-conflicts', 'exit-zero'].map(function (id) { return byId[id]; }).filter(Boolean);
+  var heroPicks = ['santa-hoodie', 'vibe-xmas', 'wishlist-hoodie', 'santa-knit'].map(function (id) { return byId[id]; }).filter(Boolean);
   S.products.forEach(function (p) { if (heroPicks.length < 4 && heroPicks.indexOf(p) < 0) heroPicks.push(p); });
-  $('.hero-pics').innerHTML = heroPicks.map(function (p, i) { return '<a href="#' + p.id + '" tabindex="-1" style="--tint:' + p.body + '">' + picture(p, i === 2 ? 'back' : 'front') + '</a>'; }).join('');
+  $('.hero-pics').innerHTML = heroPicks.map(function (p, i) { return '<a href="#' + p.id + '" tabindex="-1" style="--tint:' + p.body + '">' + picture(p, !p.photos && i === 2 ? 'back' : 'front') + '</a>'; }).join('');
   $('.foot-guide').addEventListener('click', function () { drawGuide(); var g = $('#size-guide'); g.showModal ? g.showModal() : g.setAttribute('open', ''); });
   $$('[data-filter]').forEach(function (a) { a.addEventListener('click', function () { var b = $('.filters button[data-f="' + a.dataset.filter + '"]'); if (b) b.click(); }); });
   $('.bundle-note', pdp).textContent = 'Buy ' + S.bundle.qty + ', save ' + S.bundle.percentOff + '% on each';

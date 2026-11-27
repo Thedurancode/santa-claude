@@ -474,3 +474,7 @@ h1, h2, h3 { text-wrap: balance; }
 .swatch svg { width: 100%; height: 100%; padding: 4px; }
 .swatch:has(svg) { background: color-mix(in srgb, var(--c) 18%, var(--paper)); }
 .perks li::before, .perks li:first-child::before { content: "✓"; width: auto; height: auto; background: none; box-shadow: none; color: var(--red); font: 700 1rem/1 var(--display); }
+
+/* hero: the Christmas photos fill their tiles */
+.hero-pics a:has(img) { display: block; }
+.hero-pics a img { width: 100%; height: 100%; object-fit: cover; }
