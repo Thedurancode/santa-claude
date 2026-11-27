@@ -211,10 +211,68 @@
   // the quote ticker: every product's quote, twice over so the loop is seamless
   var tick = S.products.filter(function (p) { return p.front; }).map(function (p) { return '<span>' + esc((p.back || p.front).map(function (l) { return l.replace(/^\^/, '').trim(); }).join(' ')) + '</span>'; }).join('');
   $$('.ticker-run').forEach(function (t) { t.innerHTML = tick + tick; });
-  // home: four designs, mixing fronts and backs, hoodies and tees
-  var heroPicks = ['santa-hoodie', 'vibe-xmas', 'wishlist-hoodie', 'santa-knit'].map(function (id) { return byId[id]; }).filter(Boolean);
-  S.products.forEach(function (p) { if (heroPicks.length < 4 && heroPicks.indexOf(p) < 0) heroPicks.push(p); });
-  $('.hero-pics').innerHTML = heroPicks.map(function (p, i) { return '<a href="#' + p.id + '" tabindex="-1" style="--tint:' + p.body + '">' + picture(p, !p.photos && i === 2 ? 'back' : 'front') + '</a>'; }).join('');
+  // home: a 3D clothes rack of the original designs. Flip through like a real rail:
+  // the one in front faces you, the rest hang turned on the rail behind it.
+  (function () {
+    var items = S.products.filter(function (p) { return p.photos; });
+    if (!items.length) items = S.products.slice(0, 8);
+    var box = $('.hero-pics'), still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    box.innerHTML = '<div class="rack" tabindex="0" role="group" aria-roledescription="carousel" aria-label="Christmas designs on the rack. Use the arrow keys to flip through.">' +
+      '<div class="rack-rail" aria-hidden="true"><i></i><i></i></div><div class="rack-floor" aria-hidden="true"></div>' +
+      items.map(function (p, i) {
+        return '<a class="rack-item" href="#' + p.id + '" data-i="' + i + '" tabindex="-1" draggable="false" aria-label="' + esc(p.name) + '"><span class="rack-swing">' +
+          '<svg class="rack-hook" viewBox="0 0 40 64" aria-hidden="true"><path d="M20 62V30c0-6 -14-6 -14-16a14 14 0 0 1 28 0" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>' +
+          '<span class="rack-card">' + picture(p, 'front').replace('loading="lazy"', 'loading="' + (i < 4 || i > items.length - 4 ? 'eager' : 'lazy') + '"') + '</span></span></a>';
+      }).join('') + '</div>' +
+      '<div class="rack-ui"><button class="rack-arrow" type="button" data-d="-1" aria-label="Previous design">‹</button>' +
+      '<a class="rack-label" href="#"><b></b><span></span></a>' +
+      '<button class="rack-arrow" type="button" data-d="1" aria-label="Next design">›</button></div>';
+    var rack = $('.rack', box), els = $$('.rack-item', box), label = $('.rack-label', box), at = 0, timer = 0;
+    var show = function (n, swing) {
+      at = (n + items.length) % items.length;
+      var w = els[0].offsetWidth || 240;
+      els.forEach(function (el, i) {
+        var o = i - at;
+        if (o > items.length / 2) o -= items.length;
+        if (o < -items.length / 2) o += items.length; // wrap around the rail
+        var d = Math.abs(o), sg = o < 0 ? -1 : 1;
+        var x = d === 0 ? 0 : sg * (w * .62 + (d - 1) * w * .2);
+        el.style.transform = 'translateX(' + x.toFixed(1) + 'px) translateZ(' + (d ? -w * .55 - d * 8 : 0).toFixed(1) + 'px) rotateY(' + (d ? -sg * 64 : 0) + 'deg)';
+        el.style.zIndex = 50 - d;
+        el.style.opacity = d > 5 ? 0 : 1;
+        el.classList.toggle('on', d === 0);
+        el.style.setProperty('--dim', d ? Math.max(.55, .86 - d * .05) : 1);
+        if (swing && !still && d < 4) { el.classList.remove('sway'); void el.offsetWidth; el.classList.add('sway'); }
+      });
+      var p = items[at];
+      label.href = '#' + p.id;
+      $('b', label).textContent = p.name.replace(/\s+(hoodie|knit sweater|sweater)$/i, '');
+      $('span', label).textContent = ({ sweater: 'Knit sweater', tee: 'Tee' }[p.type] || 'Hoodie') + ', ' + money(p.price);
+    };
+    var stop = function () { clearInterval(timer); timer = 0; };
+    var go = function (d) { stop(); show(at + d, true); };
+    if (!still) timer = setInterval(function () { if (!document.hidden && !$('#home').hidden) show(at + 1, true); }, 3800);
+    els.forEach(function (el) { el.addEventListener('click', function (e) { var i = +el.dataset.i; if (i !== at) { e.preventDefault(); stop(); show(i, true); } }); });
+    $$('.rack-arrow', box).forEach(function (b) { b.addEventListener('click', function () { go(+b.dataset.d); }); });
+    rack.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+      else if (e.key === 'Enter') location.hash = items[at].id;
+    });
+    // drag or swipe along the rail
+    var x0 = null, moved = false;
+    rack.addEventListener('pointerdown', function (e) { x0 = e.clientX; moved = false; });
+    rack.addEventListener('pointermove', function (e) {
+      if (x0 === null) return;
+      var dx = e.clientX - x0, step = Math.max(50, (els[0].offsetWidth || 240) * .3);
+      if (Math.abs(dx) > step) { moved = true; go(dx < 0 ? 1 : -1); x0 = e.clientX; }
+    });
+    addEventListener('pointerup', function () { x0 = null; });
+    addEventListener('pointercancel', function () { x0 = null; });
+    rack.addEventListener('click', function (e) { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
+    addEventListener('resize', function () { show(at); });
+    show(0);
+  })();
   $('.foot-guide').addEventListener('click', function () { drawGuide(); var g = $('#size-guide'); g.showModal ? g.showModal() : g.setAttribute('open', ''); });
   $$('[data-filter]').forEach(function (a) { a.addEventListener('click', function () { var b = $('.filters button[data-f="' + a.dataset.filter + '"]'); if (b) b.click(); }); });
   $('.bundle-note', pdp).textContent = 'Buy ' + S.bundle.qty + ', save ' + S.bundle.percentOff + '% on each';
